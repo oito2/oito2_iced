@@ -1,0 +1,22 @@
+[package]
+name = "oito2_iced_themes"
+description = "Preset color themes for the OITO2 Iced design system: Everforest, Rosé Pine, Nord, Dracula and Alucard, and Catppuccin."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+catppuccin.workspace = true
+iced = { workspace = true, features = ["advanced", "x11", "wayland", "thread-pool"] }
+oito2_iced.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

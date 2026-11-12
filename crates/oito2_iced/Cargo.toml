@@ -12,9 +12,9 @@ publish = false
 
 [dependencies]
 # Minimal facade: x11 and wayland select the winit backends that iced always
-# links on Linux, thread-pool the executor it requires. Applications pick
-# the renderers.
-iced = { workspace = true, features = ["advanced", "x11", "wayland", "thread-pool"] }
+# links on Linux, thread-pool the executor it requires, canvas the geometry
+# that draws the window control glyphs. Applications pick the renderers.
+iced = { workspace = true, features = ["advanced", "canvas", "x11", "wayland", "thread-pool"] }
 material-colors.workspace = true
 oito2_foundation.workspace = true
 

@@ -25,7 +25,7 @@ Rules defined for this project. They take precedence over `AGENTS.md` and over t
 - Every hand-written `.rs` file starts with the GPL-3.0 header "Copyright (C) 2026  OITO2" (two spaces, uppercase), as in `crates/oito2_iced/src/lib.rs`.
 - Toolchain 1.99.0 (`rust-toolchain.toml`), edition 2024, MSRV 1.97 (set by `material-colors` 0.5). Lints come from the workspace: `unsafe_code = "forbid"`, clippy `unwrap_used`, `panic` and `todo` denied; `clippy.toml` relaxes them inside `#[test]` functions only, so test helpers use `assert!` instead of `panic!`. Every public item has rustdoc (`#![deny(missing_docs)]`).
 - Public type names carry no `Oito2` prefix. Style classes are enums with the OITO2 variants plus `Custom(StyleFn)`, and implement `From<StyleFn>` so the `style` builder of each Iced widget keeps working.
-- The `oito2_iced` crate depends on `iced` with `default-features = false` and only `advanced`, `x11`, `wayland` and `thread-pool`; applications choose the renderers. Catalogs of feature-gated Iced widgets sit behind crate features that forward to Iced (`svg`, on by default; `qr_code`; `markdown`).
+- The `oito2_iced` crate depends on `iced` with `default-features = false` and only `advanced`, `x11`, `wayland`, `thread-pool` and `canvas` (window control glyphs); applications choose the renderers. Catalogs of feature-gated Iced widgets sit behind crate features that forward to Iced (`svg`, on by default; `qr_code`; `markdown`).
 
 ## Testing & Verification
 

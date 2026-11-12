@@ -16,6 +16,7 @@ yanked = "deny"
 # Unmaintained (not vulnerable) crates that reach the graph only through
 # Iced 0.14 and its renderers. Reassess at each Iced release.
 ignore = [
+    { id = "RUSTSEC-2024-0370", reason = "proc-macro-error: pulled by glib-macros 0.18 through oito2_settings (same pin as oito2_rs); no safe upgrade" },
     { id = "RUSTSEC-2024-0436", reason = "paste: proc macro of metal, pulled by wgpu-hal 27 (iced_wgpu)" },
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser: font parsing of fontdb, pulled by cosmic-text 0.15 (iced)" },
     { id = "RUSTSEC-2026-0206", reason = "rustybuzz: text shaping of usvg, pulled by resvg 0.45 (iced svg feature)" },

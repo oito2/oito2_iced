@@ -12,7 +12,13 @@ publish = false
 
 [dependencies]
 oito2_iced.workspace = true
+oito2_iced_settings.workspace = true
+oito2_iced_themes.workspace = true
 iced = { workspace = true, features = ["advanced", "wgpu", "tiny-skia", "thread-pool", "linux-theme-detection", "x11", "wayland"] }
+
+[dev-dependencies]
+iced_test.workspace = true
+oito2_iced_test_utils.workspace = true
 
 [lints]
 workspace = true

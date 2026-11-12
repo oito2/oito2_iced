@@ -13,22 +13,30 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-//! Client-side window chrome for undecorated windows: a title bar that
-//! drags, maximizes and opens the system menu, window control buttons, and
-//! resize handles on the edges.
+//! Client-side window chrome for undecorated windows: a title bar and a
+//! header bar that drag, maximize and open the system menu, window control
+//! buttons in the visual family of each desktop, and resize handles on the
+//! edges.
 //!
 //! The chrome publishes [`Action`] values through the `on_action` mapping
 //! of each builder; the application turns them into window tasks with
 //! [`perform`] (or [`perform_latest`] for a single-window application).
+//! The chrome follows the [`WindowState`] the application keeps from the
+//! window events.
 
-use iced::widget::{Space, button, column, container, mouse_area, row, stack, text};
+mod control;
+mod state;
+mod title_bar;
+
+pub use control::{ControlType, Labels, WindowControl, controls, window_control};
+pub use state::{Placement, WindowState};
+pub use title_bar::{INACTIVE_OPACITY, TitleBar, header_bar, title_bar};
+
+use iced::widget::{Space, column, mouse_area, row, stack};
 use iced::window::{self, Direction};
-use iced::{Alignment, Element, Length, Task, mouse};
+use iced::{Element, Length, Task, mouse};
 
 use crate::Theme;
-use crate::theme::button::Class as ButtonClass;
-use crate::theme::container::Class as ContainerClass;
-use crate::tokens::{sizes, spacing};
 
 /// Thickness of the edge resize handles, in logical pixels.
 pub const RESIZE_BORDER: f32 = 6.0;
@@ -70,66 +78,6 @@ where
     T: Send + 'static,
 {
     window::latest().and_then(move |id| perform(id, action))
-}
-
-/// A title bar: the `title` centered, `start` items on the left and the
-/// window controls on the right. A press on the bar drags the window, a
-/// double click toggles maximization and a right press opens the system
-/// menu.
-pub fn title_bar<'a, Message>(
-    title: impl text::IntoFragment<'a>,
-    start: impl Into<Element<'a, Message, Theme>>,
-    on_action: impl Fn(Action) -> Message + 'a,
-) -> Element<'a, Message, Theme>
-where
-    Message: Clone + 'a,
-{
-    let bar = stack![
-        container(text(title).font(crate::font::inter(iced::font::Weight::Bold)))
-            .center(Length::Fill),
-        row![
-            start.into(),
-            Space::new().width(Length::Fill),
-            controls(&on_action)
-        ]
-        .align_y(Alignment::Center)
-        .padding([0.0, spacing::SM]),
-    ];
-
-    mouse_area(
-        container(bar)
-            .class(ContainerClass::TitleBar)
-            .width(Length::Fill)
-            .height(sizes::TITLE_BAR_HEIGHT),
-    )
-    .on_press(on_action(Action::Drag))
-    .on_double_click(on_action(Action::ToggleMaximize))
-    .on_right_press(on_action(Action::ShowSystemMenu))
-    .into()
-}
-
-/// The minimize, maximize and close buttons.
-pub fn controls<'a, Message>(on_action: &impl Fn(Action) -> Message) -> Element<'a, Message, Theme>
-where
-    Message: Clone + 'a,
-{
-    let control = |label: &'static str, action: Action| {
-        button(container(text(label).size(14)).center(Length::Fill))
-            .class(ButtonClass::Chrome)
-            .padding(0)
-            .width(sizes::WINDOW_CONTROL_SIZE)
-            .height(sizes::WINDOW_CONTROL_SIZE)
-            .on_press(on_action(action))
-    };
-
-    row![
-        control("\u{2013}", Action::Minimize),
-        control("\u{25A1}", Action::ToggleMaximize),
-        control("\u{2715}", Action::Close),
-    ]
-    .spacing(spacing::MD)
-    .align_y(Alignment::Center)
-    .into()
 }
 
 /// Wraps the whole window `content` with eight invisible handles on the

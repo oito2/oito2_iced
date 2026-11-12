@@ -353,6 +353,113 @@ impl Palette {
     }
 }
 
+/// The few role colors a color theme family publishes, from which
+/// [`Palette::from_family`] derives a complete palette.
+///
+/// The roles follow the vocabulary most theme families use: a page
+/// background, a card surface, a secondary surface, a border, the text
+/// colors and the accents. Values are taken as given; the contrast
+/// adjustments happen when the palette is resolved.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FamilyColors {
+    /// Light or dark.
+    pub brightness: Brightness,
+    /// The page background.
+    pub background: Color,
+    /// The main surface of cards, panes and fields.
+    pub card: Color,
+    /// The body text color.
+    pub foreground: Color,
+    /// The signature accent, used as the primary fill.
+    pub primary: Color,
+    /// A surface one step above `card`, such as a selected row.
+    pub secondary: Color,
+    /// Secondary text, such as captions and placeholders.
+    pub muted_foreground: Color,
+    /// Errors and destructive actions.
+    pub destructive: Color,
+    /// Borders and dividers.
+    pub border: Color,
+    /// Success states.
+    pub success: Color,
+    /// Warning states.
+    pub warning: Color,
+    /// Informational states.
+    pub info: Color,
+    /// Syntax highlighting colors.
+    pub syntax: SyntaxColors,
+}
+
+impl Palette {
+    /// The palette of a theme family.
+    ///
+    /// The primary fill keeps `primary` as given, with black or white text,
+    /// whichever contrasts more. The surface ladder runs from the lower of
+    /// the background and the card up to the secondary surface:
+    ///
+    /// - the lowest container is whichever of `background` and `card` sits
+    ///   lower (darker in a dark theme, lighter in a light one);
+    /// - the low container is halfway from it to `card`;
+    /// - the container and the high container are one third and two thirds
+    ///   of the way from `card` to `secondary`, and the highest container is
+    ///   `secondary`;
+    /// - the title bar is the container;
+    /// - `outline` is `border` mixed 35 % toward `foreground`, and
+    ///   `outline_variant` is `border`.
+    pub fn from_family(family: &FamilyColors) -> Self {
+        let is_dark = family.brightness == Brightness::Dark;
+        let card = family.card;
+        let secondary = family.secondary;
+
+        let background_luminance = contrast::luminance(family.background);
+        let card_luminance = contrast::luminance(card);
+        let background_is_lower = if is_dark {
+            background_luminance < card_luminance
+        } else {
+            background_luminance > card_luminance
+        };
+        let lowest = if background_is_lower {
+            family.background
+        } else {
+            card
+        };
+        let container = lerp(card, secondary, 1.0 / 3.0);
+
+        Self {
+            brightness: family.brightness,
+            primary: family.primary,
+            on_primary: contrast::foreground_for(family.primary),
+            error: family.destructive,
+            background: family.background,
+            surface: card,
+            surface_container_lowest: lowest,
+            surface_container_low: lerp(lowest, card, 0.5),
+            surface_container: container,
+            surface_container_high: lerp(card, secondary, 2.0 / 3.0),
+            surface_container_highest: secondary,
+            title_bar: container,
+            on_surface: family.foreground,
+            on_surface_variant: family.muted_foreground,
+            outline: lerp(family.border, family.foreground, 0.35),
+            outline_variant: family.border,
+            success: family.success,
+            warning: family.warning,
+            info: family.info,
+            syntax: family.syntax,
+        }
+    }
+}
+
+/// The color `t` of the way from `a` to `b`, channel by channel.
+fn lerp(a: Color, b: Color, t: f32) -> Color {
+    Color {
+        r: a.r + (b.r - a.r) * t,
+        g: a.g + (b.g - a.g) * t,
+        b: a.b + (b.b - a.b) * t,
+        a: a.a + (b.a - a.a) * t,
+    }
+}
+
 impl ColorRoles {
     /// Resolves the roles of the base theme: GTK-style neutrals with
     /// `accent` as the primary hue.

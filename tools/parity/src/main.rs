@@ -35,17 +35,23 @@ const SOURCE_DIRECTORY: &str = "tools/parity/fixtures";
 
 /// Each crate fixture directory, relative to the workspace root, with the
 /// fixtures it holds.
-const TARGETS: &[(&str, &[&str])] = &[(
-    "crates/oito2_iced/tests/fixtures/parity",
-    &[
-        "tokens.json",
-        "schemes.json",
-        "foundation.json",
-        "l10n.json",
-        "format.json",
-        "manifest.json",
-    ],
-)];
+const TARGETS: &[(&str, &[&str])] = &[
+    (
+        "crates/oito2_iced/tests/fixtures/parity",
+        &[
+            "tokens.json",
+            "schemes.json",
+            "foundation.json",
+            "l10n.json",
+            "format.json",
+            "manifest.json",
+        ],
+    ),
+    (
+        "crates/oito2_iced_themes/tests/fixtures/parity",
+        &["schemes.json"],
+    ),
+];
 
 fn main() -> ExitCode {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
@@ -106,6 +112,9 @@ fn sync(source: &Path) -> Result<(), String> {
 
     for (directory, files) in TARGETS {
         let target = root.join(directory);
+
+        fs::create_dir_all(&target)
+            .map_err(|error| format!("cannot create {}: {error}", target.display()))?;
 
         for file in *files {
             let bytes = read(&source.join(SOURCE_DIRECTORY).join(file))?;

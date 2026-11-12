@@ -81,7 +81,7 @@ fn a_right_press_on_the_title_bar_opens_the_system_menu() {
 #[test]
 fn the_close_button_closes_without_dragging() {
     let mut ui = Simulator::with_size(support::settings(), SIZE, view());
-    ui.click("\u{2715}").expect("close button");
+    ui.click("Close").expect("close button");
 
     let actions: Vec<String> = ui.into_messages().map(|a| format!("{a:?}")).collect();
     assert_eq!(actions, vec![format!("{:?}", Action::Close)]);

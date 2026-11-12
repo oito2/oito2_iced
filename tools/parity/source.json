@@ -24,6 +24,10 @@
     {
       "file": "manifest.json",
       "target": "crates/oito2_iced/tests/fixtures/parity"
+    },
+    {
+      "file": "schemes.json",
+      "target": "crates/oito2_iced_themes/tests/fixtures/parity"
     }
   ],
   "repository": "oito2/oito2_ui"

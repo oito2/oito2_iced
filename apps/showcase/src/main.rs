@@ -13,27 +13,34 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-//! F0 prototype of the OITO2 Iced showcase: an undecorated window with the
-//! OITO2 title bar and resize handles, focusable buttons (Tab, Shift+Tab,
-//! Enter), a popover, an emphasized animation and the Inter weights.
+//! Showcase of the OITO2 design system for Iced: an undecorated window with
+//! the window chrome of the desktop (or of a simulated one), a theme that
+//! follows the desktop settings while the app runs, and a settings dialog
+//! for the theme, preset, contrast, density, language and desktop.
 //!
 //! Set `ICED_BACKEND=tiny-skia` to force the software renderer.
+
+mod appearance;
 
 use std::time::Instant;
 
 use iced::font::Weight;
-use iced::widget::{button, checkbox, column, container, row, text, text_input};
-use iced::window;
-use iced::{Element, Length, Subscription, Task};
+use iced::widget::{
+    button, checkbox, column, container, opaque, pick_list, row, scrollable, stack, text,
+    text_input,
+};
+use iced::{Element, Length, Subscription, Task, window};
 
+use appearance::{Appearance, ContrastChoice, DensityChoice, Desktop, Family, Language, Mode};
 use oito2_iced::animation::{self, Animation};
-use oito2_iced::theme::Brightness;
 use oito2_iced::theme::button::Class as ButtonClass;
 use oito2_iced::theme::container::Class as ContainerClass;
 use oito2_iced::theme::text::Class as TextClass;
 use oito2_iced::tokens::{Accent, spacing};
 use oito2_iced::widget::{focusable, popover};
+use oito2_iced::window::{Labels, Placement, WindowState};
 use oito2_iced::{Theme, focus, font};
+use oito2_iced_settings::SystemSettings;
 
 fn main() -> iced::Result {
     let application = iced::application(Showcase::new, Showcase::update, Showcase::view)
@@ -72,8 +79,10 @@ fn platform_specific() -> window::settings::PlatformSpecific {
 }
 
 struct Showcase {
-    brightness: Brightness,
-    accent: Accent,
+    settings: SystemSettings,
+    appearance: Appearance,
+    window: WindowState,
+    settings_open: bool,
     presses: u32,
     popover_open: bool,
     checked: bool,
@@ -85,9 +94,19 @@ struct Showcase {
 #[derive(Debug, Clone)]
 enum Message {
     Window(oito2_iced::window::Action),
-    Press,
-    ToggleBrightness,
+    WindowEvent(window::Id, window::Event),
+    Placement(Placement),
+    System(SystemSettings),
+    OpenSettings,
+    CloseSettings,
+    Mode(Mode),
+    Family(Family),
     NextAccent,
+    Contrast(ContrastChoice),
+    Density(DensityChoice),
+    Language(Language),
+    Desktop(Desktop),
+    Press,
     TogglePopover,
     DismissPopover,
     Check(bool),
@@ -99,8 +118,10 @@ enum Message {
 impl Showcase {
     fn new() -> Self {
         Self {
-            brightness: Brightness::Light,
-            accent: Accent::Blue,
+            settings: oito2_iced_settings::read(),
+            appearance: Appearance::default(),
+            window: WindowState::default(),
+            settings_open: false,
             presses: 0,
             popover_open: false,
             checked: false,
@@ -111,26 +132,41 @@ impl Showcase {
     }
 
     fn theme(&self) -> Theme {
-        Theme::new(self.brightness, self.accent)
+        self.appearance.theme(&self.settings)
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Window(action) => return oito2_iced::window::perform_latest(action),
-            Message::Press => self.presses += 1,
-            Message::ToggleBrightness => {
-                self.brightness = match self.brightness {
-                    Brightness::Light => Brightness::Dark,
-                    Brightness::Dark => Brightness::Light,
-                };
+            Message::WindowEvent(id, event) => {
+                if self.window.update(&event) {
+                    return WindowState::query(id).map(Message::Placement);
+                }
             }
+            Message::Placement(placement) => self.window.apply(placement),
+            Message::System(settings) => self.settings = settings,
+            Message::OpenSettings => self.settings_open = true,
+            Message::CloseSettings => self.settings_open = false,
+            Message::Mode(mode) => self.appearance.mode = mode,
+            Message::Family(family) => self.appearance.family = family,
             Message::NextAccent => {
-                let index = Accent::ALL
-                    .iter()
-                    .position(|accent| *accent == self.accent)
-                    .unwrap_or_default();
-                self.accent = Accent::ALL[(index + 1) % Accent::ALL.len()];
+                let next = match self.appearance.accent {
+                    None => 0,
+                    Some(accent) => {
+                        Accent::ALL
+                            .iter()
+                            .position(|candidate| *candidate == accent)
+                            .unwrap_or_default()
+                            + 1
+                    }
+                };
+                self.appearance.accent = Accent::ALL.get(next).copied();
             }
+            Message::Contrast(contrast) => self.appearance.contrast = contrast,
+            Message::Density(density) => self.appearance.density = density,
+            Message::Language(language) => self.appearance.language = language,
+            Message::Desktop(desktop) => self.appearance.desktop = desktop,
+            Message::Press => self.presses += 1,
             Message::TogglePopover => self.popover_open = !self.popover_open,
             Message::DismissPopover => self.popover_open = false,
             Message::Check(checked) => self.checked = checked,
@@ -147,16 +183,37 @@ impl Showcase {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        if self.expanded.is_animating(self.now) {
+        let frames = if self.expanded.is_animating(self.now) {
             window::frames().map(Message::Frame)
         } else {
             Subscription::none()
-        }
+        };
+
+        Subscription::batch([
+            oito2_iced_settings::subscription().map(Message::System),
+            window::events().map(|(id, event)| Message::WindowEvent(id, event)),
+            frames,
+        ])
     }
 
     fn view(&self) -> Element<'_, Message, Theme> {
-        let header =
-            oito2_iced::window::title_bar("OITO2 Iced \u{2014} F0", text(""), Message::Window);
+        let localizations = self.appearance.language.localizations();
+        let (style, layout) = self.appearance.chrome(&self.settings);
+
+        let header = oito2_iced::window::header_bar(Message::Window)
+            .title("OITO2 Iced")
+            .start(
+                focusable(
+                    button("Settings")
+                        .class(ButtonClass::Chrome)
+                        .on_press(Message::OpenSettings),
+                )
+                .on_activate(Message::OpenSettings),
+            )
+            .control_style(style)
+            .button_layout(layout)
+            .state(self.window)
+            .labels(Labels::new(&localizations));
 
         let action = |label: &'static str, class: ButtonClass<'static>, message: Message| {
             focusable(button(label).class(class).on_press(message.clone())).on_activate(message)
@@ -173,11 +230,6 @@ impl Showcase {
         .spacing(spacing::SM);
 
         let theme_controls = row![
-            action(
-                "Light / dark",
-                ButtonClass::Outlined,
-                Message::ToggleBrightness
-            ),
             action("Next accent", ButtonClass::Outlined, Message::NextAccent),
             popover(
                 action("Popover", ButtonClass::Tonal, Message::TogglePopover),
@@ -267,8 +319,216 @@ impl Showcase {
         .spacing(spacing::LG)
         .padding(spacing::PAGE);
 
-        let window = column![header, page];
+        let window = column![header, scrollable(page).height(Length::Fill)];
 
-        oito2_iced::window::resize_handles(focus::navigation(window), Message::Window)
+        let content: Element<'_, Message, Theme> = if self.settings_open {
+            stack![window, self.settings_dialog()].into()
+        } else {
+            window.into()
+        };
+
+        oito2_iced::window::resize_handles(focus::navigation(content), Message::Window)
+    }
+
+    /// The settings dialog over a scrim.
+    fn settings_dialog(&self) -> Element<'_, Message, Theme> {
+        let appearance = &self.appearance;
+
+        let field = |label: &'static str, control: Element<'static, Message, Theme>| {
+            row![
+                text(label)
+                    .width(Length::Fixed(140.0))
+                    .class(TextClass::Variant),
+                control
+            ]
+            .spacing(spacing::MD)
+            .align_y(iced::Alignment::Center)
+        };
+
+        let dialog = container(
+            column![
+                text("Settings")
+                    .font(font::inter(Weight::Semibold))
+                    .size(oito2_iced::tokens::typography::TITLE_LARGE.size),
+                field(
+                    "Theme",
+                    pick_list(Mode::ALL, Some(appearance.mode), Message::Mode).into()
+                ),
+                field(
+                    "Color theme",
+                    pick_list(Family::all(), Some(appearance.family), Message::Family).into()
+                ),
+                field(
+                    "Contrast",
+                    pick_list(
+                        ContrastChoice::ALL,
+                        Some(appearance.contrast),
+                        Message::Contrast
+                    )
+                    .into()
+                ),
+                field(
+                    "Density",
+                    pick_list(
+                        DensityChoice::ALL,
+                        Some(appearance.density),
+                        Message::Density
+                    )
+                    .into()
+                ),
+                field(
+                    "Language",
+                    pick_list(Language::ALL, Some(appearance.language), Message::Language).into()
+                ),
+                field(
+                    "Desktop",
+                    pick_list(Desktop::all(), Some(appearance.desktop), Message::Desktop).into()
+                ),
+                row![
+                    iced::widget::space::horizontal(),
+                    focusable(
+                        button("Close")
+                            .class(ButtonClass::Filled)
+                            .on_press(Message::CloseSettings)
+                    )
+                    .on_activate(Message::CloseSettings),
+                ],
+            ]
+            .spacing(spacing::MD)
+            .width(440),
+        )
+        .class(ContainerClass::Dialog)
+        .padding(spacing::XL);
+
+        opaque(
+            container(dialog)
+                .center(Length::Fill)
+                .class(ContainerClass::Custom(Box::new(|theme: &Theme| {
+                    container::Style::default().background(theme.roles().scrim.scale_alpha(0.32))
+                }))),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iced_test::simulator::Simulator;
+    use oito2_iced::foundation::{DesktopEnvironment, OperatingSystem, WindowControlStyle};
+    use oito2_iced_settings::Platform;
+    use oito2_iced_themes::Preset;
+
+    /// The showcase on GNOME with no system preferences.
+    fn showcase() -> Showcase {
+        Showcase {
+            settings: SystemSettings::fallback(
+                Platform::new(OperatingSystem::Linux, false),
+                Some(DesktopEnvironment::Gnome),
+            ),
+            ..Showcase::new()
+        }
+    }
+
+    /// Runs the messages the simulated interactions published.
+    fn run(app: &mut Showcase, messages: impl IntoIterator<Item = Message>) {
+        for message in messages {
+            let _ = app.update(message);
+        }
+    }
+
+    #[test]
+    fn the_settings_button_opens_the_dialog() {
+        let mut app = showcase();
+        let messages: Vec<Message> = {
+            let mut ui = Simulator::with_settings(oito2_iced_test_utils::settings(), app.view());
+            ui.click("Settings").expect("settings button");
+            ui.into_messages().collect()
+        };
+
+        run(&mut app, messages);
+
+        let mut ui = Simulator::with_settings(oito2_iced_test_utils::settings(), app.view());
+        assert!(ui.find("Color theme").is_ok());
+        assert!(ui.find("Desktop").is_ok());
+    }
+
+    #[test]
+    fn the_appearance_drives_the_theme_and_the_chrome() {
+        let mut app = showcase();
+
+        assert_eq!(
+            app.theme().brightness(),
+            oito2_iced::theme::Brightness::Light
+        );
+
+        run(
+            &mut app,
+            [
+                Message::Family(Family(Some(Preset::CatppuccinMocha))),
+                Message::Contrast(ContrastChoice::High),
+                Message::Desktop(Desktop(Some(WindowControlStyle::Macos))),
+                Message::Language(Language::Portuguese),
+            ],
+        );
+
+        let theme = app.theme();
+        assert_eq!(
+            theme.roles(),
+            Preset::CatppuccinMocha
+                .theme(oito2_iced::theme::Contrast::High)
+                .roles()
+        );
+
+        let (style, layout) = app.appearance.chrome(&app.settings);
+        assert_eq!(style, WindowControlStyle::Macos);
+        assert!(layout.trailing.is_empty());
+
+        let mut ui = Simulator::with_settings(oito2_iced_test_utils::settings(), app.view());
+        assert!(ui.find("Fechar").is_ok(), "Portuguese window labels");
+    }
+
+    #[test]
+    fn system_changes_reach_the_theme() {
+        let mut app = showcase();
+        let dark = SystemSettings {
+            color_scheme: Some(oito2_iced_settings::ColorScheme::Dark),
+            accent_color: Some("#3A944A".to_owned()),
+            ..app.settings.clone()
+        };
+
+        run(&mut app, [Message::System(dark)]);
+
+        assert_eq!(
+            app.theme().roles(),
+            Theme::base(
+                oito2_iced::theme::Brightness::Dark,
+                Accent::Green.color(),
+                oito2_iced::theme::Contrast::Standard
+            )
+            .roles()
+        );
+    }
+
+    #[test]
+    fn showcase_golden() {
+        let mut app = showcase();
+        run(&mut app, [Message::OpenSettings]);
+
+        for (mode, name) in [
+            (Mode::Light, "showcase_settings_light"),
+            (Mode::Dark, "showcase_settings_dark"),
+        ] {
+            run(&mut app, [Message::Mode(mode)]);
+
+            let theme = app.theme();
+            let mut ui = Simulator::with_size(
+                oito2_iced_test_utils::settings(),
+                (960.0, 680.0),
+                app.view(),
+            );
+            let snapshot = ui.snapshot(&theme).expect("snapshot");
+
+            oito2_iced_test_utils::golden!(&snapshot, name);
+        }
     }
 }

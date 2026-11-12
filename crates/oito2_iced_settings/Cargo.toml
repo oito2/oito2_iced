@@ -1,0 +1,19 @@
+[package]
+name = "oito2_iced_settings"
+description = "Follows the desktop settings in OITO2 Iced apps: accent color, color scheme, high contrast and window buttons."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+iced = { workspace = true, features = ["advanced", "x11", "wayland", "thread-pool"] }
+oito2_iced.workspace = true
+oito2_settings.workspace = true
+
+[lints]
+workspace = true

@@ -55,7 +55,9 @@ use oito2_foundation::Density;
 
 use crate::tokens::{Accent, sizes};
 
-pub use roles::{ChromeColors, ColorRoles, Palette, SemanticColors, SyntaxColors, tonal_spot};
+pub use roles::{
+    ChromeColors, ColorRoles, FamilyColors, Palette, SemanticColors, SyntaxColors, tonal_spot,
+};
 
 /// Hover state layer opacity.
 pub const HOVER_OPACITY: f32 = 0.08;

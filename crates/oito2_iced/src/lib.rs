@@ -24,8 +24,10 @@
 //!   scale; [`font`] the embedded Inter and JetBrains Mono fonts.
 //! - [`focus`] gives keyboard focus to any element, moves it with Tab, the
 //!   arrow keys and custom operations, and draws the focus ring.
-//! - [`widget`] holds the OITO2 widgets; [`window`] the title bar and resize
-//!   handles of an undecorated window; [`animation`] the Material motion.
+//! - [`overlay`] holds the anchored panel behind popovers, menus and
+//!   tooltips; [`widget`] the OITO2 widgets; [`window`] the title bar,
+//!   window controls and resize handles of an undecorated window;
+//!   [`animation`] the Material motion.
 //! - [`l10n`], [`format`](mod@format), [`collections`] and [`shortcuts`] work without a
 //!   user interface: strings in English and Brazilian Portuguese, byte sizes
 //!   and relative times, list, selection and tree models, and key chords.
@@ -40,6 +42,7 @@ pub mod focus;
 pub mod font;
 pub mod format;
 pub mod l10n;
+pub mod overlay;
 pub mod shortcuts;
 pub mod theme;
 pub mod tokens;
