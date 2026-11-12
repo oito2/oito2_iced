@@ -46,13 +46,26 @@ fn main() -> iced::Result {
             size: iced::Size::new(960.0, 680.0),
             min_size: Some(iced::Size::new(480.0, 360.0)),
             decorations: false,
-            platform_specific: window::settings::PlatformSpecific {
-                application_id: "io.github.oito2.oito2_iced.showcase".into(),
-                ..Default::default()
-            },
+            platform_specific: platform_specific(),
             ..window::Settings::default()
         })
         .run()
+}
+
+/// Platform window settings; on Linux they set the application id that
+/// Wayland compositors and X11 window managers use to group the window.
+#[cfg(target_os = "linux")]
+fn platform_specific() -> window::settings::PlatformSpecific {
+    window::settings::PlatformSpecific {
+        application_id: "io.github.oito2.oito2_iced.showcase".into(),
+        ..Default::default()
+    }
+}
+
+/// Platform window settings; the defaults on platforms other than Linux.
+#[cfg(not(target_os = "linux"))]
+fn platform_specific() -> window::settings::PlatformSpecific {
+    window::settings::PlatformSpecific::default()
 }
 
 struct Showcase {
