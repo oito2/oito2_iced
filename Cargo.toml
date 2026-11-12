@@ -1,0 +1,35 @@
+[workspace]
+resolver = "3"
+members = ["crates/oito2_iced", "apps/showcase"]
+
+# One version for every crate of the workspace; bumped together at each release.
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97"
+license = "GPL-3.0-only"
+authors = ["OITO2"]
+repository = "https://github.com/oito2/oito2_iced"
+homepage = "https://github.com/oito2/oito2_iced"
+
+# One version per dependency for the whole workspace.
+[workspace.dependencies]
+oito2_iced = { version = "0.0.0", path = "crates/oito2_iced" }
+iced = { version = "0.14.0", default-features = false }
+iced_test = "0.14.0"
+material-colors = "0.5.0"
+serde_json = "1.0"
+png = "0.18"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+panic = "deny"
+todo = "deny"
+
+# Dependencies are compiled with optimizations in debug builds, so the
+# renderers stay usable while the workspace crates keep fast rebuilds.
+[profile.dev.package."*"]
+opt-level = 1

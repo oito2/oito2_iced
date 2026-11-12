@@ -1,0 +1,27 @@
+[package]
+name = "oito2_iced"
+description = "OITO2 design system for Iced: Material 3 theme, widgets and window chrome."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+# Minimal facade: x11 and wayland select the winit backends that iced always
+# links on Linux, thread-pool the executor it requires. Applications pick
+# the renderers.
+iced = { workspace = true, features = ["advanced", "x11", "wayland", "thread-pool"] }
+material-colors.workspace = true
+
+[dev-dependencies]
+iced = { workspace = true, features = ["advanced", "x11", "wayland", "tiny-skia"] }
+iced_test.workspace = true
+serde_json.workspace = true
+png.workspace = true
+
+[lints]
+workspace = true

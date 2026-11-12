@@ -1,0 +1,18 @@
+[package]
+name = "oito2_iced_showcase"
+description = "Showcase of the OITO2 design system for Iced."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+oito2_iced.workspace = true
+iced = { workspace = true, features = ["advanced", "wgpu", "tiny-skia", "thread-pool", "linux-theme-detection", "x11", "wayland"] }
+
+[lints]
+workspace = true

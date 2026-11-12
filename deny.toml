@@ -1,0 +1,53 @@
+# Configuration of `cargo deny check`: advisories, licenses, duplicate
+# versions and dependency sources, resolved for every feature on the three
+# supported targets.
+
+[graph]
+all-features = true
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "aarch64-apple-darwin",
+]
+
+[advisories]
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "deny"
+# Unmaintained (not vulnerable) crates that reach the graph only through
+# Iced 0.14 and its renderers. Reassess at each Iced release.
+ignore = [
+    { id = "RUSTSEC-2024-0436", reason = "paste: proc macro of metal, pulled by wgpu-hal 27 (iced_wgpu)" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser: font parsing of fontdb, pulled by cosmic-text 0.15 (iced)" },
+    { id = "RUSTSEC-2026-0370", reason = "zvariant: pulled by zbus 5 through mundy 0.2 (iced_winit theme detection)" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names: pulled by zbus 5 through mundy 0.2 (iced_winit theme detection)" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: pulled by zbus 5 through mundy 0.2 (iced_winit theme detection)" },
+]
+
+[licenses]
+# The crates of this workspace are GPL-3.0-only; every dependency must use a
+# license compatible with it.
+allow = [
+    "GPL-3.0-only",
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "ISC",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
