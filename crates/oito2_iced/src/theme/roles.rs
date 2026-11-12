@@ -13,8 +13,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-//! The resolved color roles of a theme: Material 3 roles, window chrome and
-//! semantic text colors.
+//! The resolved color roles of a theme: the Material 3 roles, the page
+//! background, the window chrome, the semantic text colors and the syntax
+//! colors.
 
 use iced::Color;
 use material_colors::color::Rgb;
@@ -22,14 +23,23 @@ use material_colors::hct::Hct;
 use material_colors::scheme::Scheme;
 use material_colors::scheme::variant::SchemeTonalSpot;
 
-use super::Brightness;
-use super::contrast::{self, NON_TEXT_AA, TEXT_AA};
-use crate::tokens::{Accent, Neutrals, Status};
+use super::contrast::{self, NON_TEXT_AA, TEXT_AA, TEXT_AAA};
+use super::{Brightness, Contrast};
+use crate::tokens::{Neutrals, Status};
 
 /// Every color role a theme resolves.
+///
+/// Text roles reach WCAG AA against every surface of the theme:
+/// `on_surface`, `on_surface_variant` and every [`SemanticColors`] and
+/// [`SyntaxColors`] color reach 4.5:1, and `outline` reaches 3:1. With
+/// [`Contrast::High`] the targets rise to 7:1 and 4.5:1.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ColorRoles {
-    /// Window background.
+    /// Light or dark.
+    pub brightness: Brightness,
+    /// Whether the high-contrast targets apply.
+    pub high_contrast: bool,
+    /// Page background.
     pub background: Color,
     /// Primary color: filled buttons, selection, focus.
     pub primary: Color,
@@ -39,6 +49,14 @@ pub struct ColorRoles {
     pub primary_container: Color,
     /// Text and icons on `primary_container`.
     pub on_primary_container: Color,
+    /// Primary tone that stays the same in light and dark themes.
+    pub primary_fixed: Color,
+    /// Dimmer variant of `primary_fixed`.
+    pub primary_fixed_dim: Color,
+    /// Text and icons on `primary_fixed`.
+    pub on_primary_fixed: Color,
+    /// Lower-emphasis text and icons on `primary_fixed`.
+    pub on_primary_fixed_variant: Color,
     /// Secondary color.
     pub secondary: Color,
     /// Text and icons on `secondary`.
@@ -47,6 +65,14 @@ pub struct ColorRoles {
     pub secondary_container: Color,
     /// Text and icons on `secondary_container`.
     pub on_secondary_container: Color,
+    /// Secondary tone that stays the same in light and dark themes.
+    pub secondary_fixed: Color,
+    /// Dimmer variant of `secondary_fixed`.
+    pub secondary_fixed_dim: Color,
+    /// Text and icons on `secondary_fixed`.
+    pub on_secondary_fixed: Color,
+    /// Lower-emphasis text and icons on `secondary_fixed`.
+    pub on_secondary_fixed_variant: Color,
     /// Tertiary color.
     pub tertiary: Color,
     /// Text and icons on `tertiary`.
@@ -55,6 +81,14 @@ pub struct ColorRoles {
     pub tertiary_container: Color,
     /// Text and icons on `tertiary_container`.
     pub on_tertiary_container: Color,
+    /// Tertiary tone that stays the same in light and dark themes.
+    pub tertiary_fixed: Color,
+    /// Dimmer variant of `tertiary_fixed`.
+    pub tertiary_fixed_dim: Color,
+    /// Text and icons on `tertiary_fixed`.
+    pub on_tertiary_fixed: Color,
+    /// Lower-emphasis text and icons on `tertiary_fixed`.
+    pub on_tertiary_fixed_variant: Color,
     /// Error color.
     pub error: Color,
     /// Text and icons on `error`.
@@ -67,8 +101,10 @@ pub struct ColorRoles {
     pub surface: Color,
     /// Text and icons on surfaces.
     pub on_surface: Color,
-    /// Secondary text and icons on surfaces.
-    pub on_surface_variant: Color,
+    /// The dimmest surface.
+    pub surface_dim: Color,
+    /// The brightest surface.
+    pub surface_bright: Color,
     /// Lowest surface container.
     pub surface_container_lowest: Color,
     /// Low surface container.
@@ -79,41 +115,58 @@ pub struct ColorRoles {
     pub surface_container_high: Color,
     /// Highest surface container.
     pub surface_container_highest: Color,
+    /// Secondary text and icons on surfaces.
+    pub on_surface_variant: Color,
     /// Borders of controls.
     pub outline: Color,
     /// Dividers and decorative borders.
     pub outline_variant: Color,
+    /// Shadows.
+    pub shadow: Color,
+    /// Scrim behind modal surfaces.
+    pub scrim: Color,
     /// Inverse surface: toasts and tooltips.
     pub inverse_surface: Color,
     /// Text on `inverse_surface`.
     pub on_inverse_surface: Color,
     /// Primary color on `inverse_surface`.
     pub inverse_primary: Color,
+    /// Tint laid over raised surfaces; transparent, so surfaces keep their
+    /// color.
+    pub surface_tint: Color,
     /// Window chrome colors.
     pub chrome: ChromeColors,
     /// Semantic text colors.
     pub semantic: SemanticColors,
+    /// Syntax highlighting colors.
+    pub syntax: SyntaxColors,
 }
 
 /// Background colors of the window chrome.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ChromeColors {
-    /// Window background.
+    /// Page background.
     pub background: Color,
-    /// Sidebar.
+    /// A narrow sidebar column, such as an icon rail.
     pub sidebar: Color,
-    /// Main bar.
+    /// Main bar: the pane beside a sidebar.
     pub mainbar: Color,
     /// Title bar.
     pub title_bar: Color,
-    /// Dialogs.
+    /// Dialogs, sheets and drawers.
     pub dialog: Color,
+}
+
+impl ChromeColors {
+    /// The smallest contrast ratio between adjacent chrome surfaces: the
+    /// page background, the sidebar and the main bar.
+    pub const MINIMUM_STEP: f32 = 1.04;
 }
 
 /// Text colors that reach the contrast target on every surface.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SemanticColors {
-    /// Primary color used as text.
+    /// Primary color used as text, indicators and focus rings.
     pub primary_text: Color,
     /// Error color used as text.
     pub error_text: Color,
@@ -127,12 +180,135 @@ pub struct SemanticColors {
     pub link: Color,
 }
 
-impl ColorRoles {
-    /// Resolves the roles of the base theme for a brightness and an accent at
-    /// standard contrast: GTK neutrals for the surfaces, the accent raised to
-    /// AA against white as the primary color, and the remaining Material
-    /// roles from a tonal-spot scheme seeded by that primary color.
-    pub fn base(brightness: Brightness, accent: Accent) -> Self {
+/// Colors of the token roles of syntax-highlighted code.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SyntaxColors {
+    /// Plain code text.
+    pub foreground: Color,
+    /// Comments.
+    pub comment: Color,
+    /// Keywords and control flow.
+    pub keyword: Color,
+    /// String literals.
+    pub string: Color,
+    /// Numeric literals.
+    pub number: Color,
+    /// Function and method names.
+    pub function: Color,
+    /// Type and class names.
+    pub r#type: Color,
+    /// Markup tags.
+    pub tag: Color,
+    /// Markup attributes.
+    pub attribute: Color,
+    /// Constants and symbols.
+    pub constant: Color,
+    /// Invalid code.
+    pub invalid: Color,
+}
+
+impl SyntaxColors {
+    /// Syntax colors of the light base theme.
+    pub const LIGHT: SyntaxColors = SyntaxColors {
+        foreground: Color::from_rgb8(0x20, 0x20, 0x20),
+        comment: Color::from_rgb8(0x77, 0x76, 0x7B),
+        keyword: Color::from_rgb8(0x91, 0x41, 0xAC),
+        string: Color::from_rgb8(0x26, 0xA2, 0x69),
+        number: Color::from_rgb8(0xC6, 0x46, 0x00),
+        function: Color::from_rgb8(0x1C, 0x71, 0xD8),
+        r#type: Color::from_rgb8(0x21, 0x90, 0xA4),
+        tag: Color::from_rgb8(0xC0, 0x1C, 0x28),
+        attribute: Color::from_rgb8(0x98, 0x6A, 0x44),
+        constant: Color::from_rgb8(0xD5, 0x61, 0x99),
+        invalid: Color::from_rgb8(0xE0, 0x1B, 0x24),
+    };
+
+    /// Syntax colors of the dark base theme.
+    pub const DARK: SyntaxColors = SyntaxColors {
+        foreground: Color::from_rgb8(0xF7, 0xF7, 0xF7),
+        comment: Color::from_rgb8(0x9A, 0x99, 0x96),
+        keyword: Color::from_rgb8(0xDC, 0x8A, 0xDD),
+        string: Color::from_rgb8(0x8F, 0xF0, 0xA4),
+        number: Color::from_rgb8(0xFF, 0xA3, 0x48),
+        function: Color::from_rgb8(0x99, 0xC1, 0xF1),
+        r#type: Color::from_rgb8(0x93, 0xDD, 0xC2),
+        tag: Color::from_rgb8(0xF6, 0x61, 0x51),
+        attribute: Color::from_rgb8(0xF9, 0xF0, 0x6B),
+        constant: Color::from_rgb8(0xF4, 0x9A, 0xC1),
+        invalid: Color::from_rgb8(0xFF, 0x7B, 0x63),
+    };
+
+    /// Returns the palette with every color raised to `target` contrast
+    /// against all `backgrounds`.
+    pub fn ensure_contrast(&self, backgrounds: &[Color], target: f32) -> Self {
+        let fix = |color| contrast::ensure(color, backgrounds, target);
+
+        Self {
+            foreground: fix(self.foreground),
+            comment: fix(self.comment),
+            keyword: fix(self.keyword),
+            string: fix(self.string),
+            number: fix(self.number),
+            function: fix(self.function),
+            r#type: fix(self.r#type),
+            tag: fix(self.tag),
+            attribute: fix(self.attribute),
+            constant: fix(self.constant),
+            invalid: fix(self.invalid),
+        }
+    }
+}
+
+/// The raw colors of a theme family, before the contrast adjustments.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Palette {
+    /// Light or dark.
+    pub brightness: Brightness,
+    /// Primary fill.
+    pub primary: Color,
+    /// Text and icons on `primary`.
+    pub on_primary: Color,
+    /// Error fill.
+    pub error: Color,
+    /// Page background.
+    pub background: Color,
+    /// Surface of cards and content.
+    pub surface: Color,
+    /// Lowest surface container.
+    pub surface_container_lowest: Color,
+    /// Low surface container.
+    pub surface_container_low: Color,
+    /// Surface container.
+    pub surface_container: Color,
+    /// High surface container.
+    pub surface_container_high: Color,
+    /// Highest surface container.
+    pub surface_container_highest: Color,
+    /// Title bar.
+    pub title_bar: Color,
+    /// Text and icons on surfaces.
+    pub on_surface: Color,
+    /// Secondary text and icons on surfaces.
+    pub on_surface_variant: Color,
+    /// Borders of controls.
+    pub outline: Color,
+    /// Dividers and decorative borders.
+    pub outline_variant: Color,
+    /// Success.
+    pub success: Color,
+    /// Warning.
+    pub warning: Color,
+    /// Information.
+    pub info: Color,
+    /// Syntax colors.
+    pub syntax: SyntaxColors,
+}
+
+impl Palette {
+    /// The palette of the base theme: the neutral and status colors of
+    /// `brightness` with `accent` as the primary hue, darkened as far as
+    /// needed for white text to reach the text target of `contrast`.
+    pub fn base(brightness: Brightness, accent: Color, contrast: Contrast) -> Self {
         let is_dark = brightness == Brightness::Dark;
         let neutrals = if is_dark {
             Neutrals::DARK
@@ -140,81 +316,227 @@ impl ColorRoles {
             Neutrals::LIGHT
         };
         let status = if is_dark { Status::DARK } else { Status::LIGHT };
+        let high = contrast == Contrast::High;
 
-        let primary = contrast::ensure(accent.color(), &[Color::WHITE], TEXT_AA);
-        let seed = tonal_spot(primary, is_dark);
-
-        let chrome = ChromeColors {
-            background: neutrals.surface_container_low,
-            sidebar: neutrals.surface_container,
-            mainbar: neutrals.surface_container_highest,
-            title_bar: neutrals.title_bar,
-            dialog: if is_dark {
-                neutrals.surface_container_high
-            } else {
-                neutrals.surface
-            },
+        let on_surface = match (high, is_dark) {
+            (true, true) => Color::WHITE,
+            (true, false) => Color::BLACK,
+            (false, _) => neutrals.on_surface,
         };
 
-        let surfaces = [
-            chrome.background,
-            neutrals.surface,
-            neutrals.surface_container_lowest,
-            neutrals.surface_container_low,
-            neutrals.surface_container,
-            neutrals.surface_container_high,
-            neutrals.surface_container_highest,
-            chrome.title_bar,
-            chrome.sidebar,
-            chrome.mainbar,
-            chrome.dialog,
-        ];
-        let text = |color| contrast::ensure(color, &surfaces, TEXT_AA);
-
-        let on_surface = text(neutrals.on_surface);
-        let primary_text = text(primary);
-
         Self {
-            background: chrome.background,
-            primary,
+            brightness,
+            primary: contrast::ensure(accent, &[Color::WHITE], text_target(contrast)),
             on_primary: Color::WHITE,
-            primary_container: color(seed.primary_container),
-            on_primary_container: color(seed.on_primary_container),
-            secondary: color(seed.secondary),
-            on_secondary: color(seed.on_secondary),
-            secondary_container: color(seed.secondary_container),
-            on_secondary_container: color(seed.on_secondary_container),
-            tertiary: color(seed.tertiary),
-            on_tertiary: color(seed.on_tertiary),
-            tertiary_container: color(seed.tertiary_container),
-            on_tertiary_container: color(seed.on_tertiary_container),
             error: status.error,
-            on_error: contrast::foreground_for(status.error),
-            error_container: color(seed.error_container),
-            on_error_container: color(seed.on_error_container),
+            background: neutrals.surface_container_low,
             surface: neutrals.surface,
-            on_surface,
-            on_surface_variant: text(neutrals.on_surface_variant),
             surface_container_lowest: neutrals.surface_container_lowest,
             surface_container_low: neutrals.surface_container_low,
             surface_container: neutrals.surface_container,
             surface_container_high: neutrals.surface_container_high,
             surface_container_highest: neutrals.surface_container_highest,
-            outline: contrast::ensure(neutrals.outline, &surfaces, NON_TEXT_AA),
+            title_bar: neutrals.title_bar,
+            on_surface,
+            on_surface_variant: neutrals.on_surface_variant,
+            outline: neutrals.outline,
             outline_variant: neutrals.outline_variant,
+            success: status.success,
+            warning: status.warning,
+            info: status.info,
+            syntax: if is_dark {
+                SyntaxColors::DARK
+            } else {
+                SyntaxColors::LIGHT
+            },
+        }
+    }
+}
+
+impl ColorRoles {
+    /// Resolves the roles of the base theme: GTK-style neutrals with
+    /// `accent` as the primary hue.
+    pub fn base(brightness: Brightness, accent: Color, contrast: Contrast) -> Self {
+        Self::resolve(&Palette::base(brightness, accent, contrast), contrast)
+    }
+
+    /// Resolves the roles of a palette: derives the chrome colors, raises
+    /// the text, outline, semantic and syntax colors to the contrast
+    /// targets against every surface, and fills the remaining Material
+    /// roles from a tonal-spot scheme seeded by the primary color.
+    pub fn resolve(palette: &Palette, contrast: Contrast) -> Self {
+        let is_dark = palette.brightness == Brightness::Dark;
+        let high_contrast = contrast == Contrast::High;
+        let text_target = text_target(contrast);
+        let non_text_target = if high_contrast { TEXT_AA } else { NON_TEXT_AA };
+
+        let seed = tonal_spot(palette.primary, is_dark);
+
+        let mainbar = contrast::ensure(
+            palette.surface_container_highest,
+            &[palette.background],
+            ChromeColors::MINIMUM_STEP,
+        );
+        let chrome = ChromeColors {
+            background: palette.background,
+            sidebar: contrast::ensure(
+                palette.surface_container,
+                &[palette.background, mainbar],
+                ChromeColors::MINIMUM_STEP,
+            ),
+            mainbar,
+            title_bar: palette.title_bar,
+            dialog: if is_dark {
+                palette.surface_container_high
+            } else {
+                palette.surface
+            },
+        };
+
+        let surfaces = [
+            palette.background,
+            palette.surface,
+            palette.surface_container_lowest,
+            palette.surface_container_low,
+            palette.surface_container,
+            palette.surface_container_high,
+            palette.surface_container_highest,
+            chrome.title_bar,
+            chrome.sidebar,
+            chrome.mainbar,
+            chrome.dialog,
+        ];
+        let text = |color| contrast::ensure(color, &surfaces, text_target);
+
+        let on_surface = text(palette.on_surface);
+        let outline = contrast::ensure(palette.outline, &surfaces, non_text_target);
+        let primary_text = text(palette.primary);
+
+        Self {
+            brightness: palette.brightness,
+            high_contrast,
+            background: palette.background,
+            primary: palette.primary,
+            on_primary: palette.on_primary,
+            primary_container: color(seed.primary_container),
+            on_primary_container: color(seed.on_primary_container),
+            primary_fixed: color(seed.primary_fixed),
+            primary_fixed_dim: color(seed.primary_fixed_dim),
+            on_primary_fixed: color(seed.on_primary_fixed),
+            on_primary_fixed_variant: color(seed.on_primary_fixed_variant),
+            secondary: color(seed.secondary),
+            on_secondary: color(seed.on_secondary),
+            secondary_container: color(seed.secondary_container),
+            on_secondary_container: color(seed.on_secondary_container),
+            secondary_fixed: color(seed.secondary_fixed),
+            secondary_fixed_dim: color(seed.secondary_fixed_dim),
+            on_secondary_fixed: color(seed.on_secondary_fixed),
+            on_secondary_fixed_variant: color(seed.on_secondary_fixed_variant),
+            tertiary: color(seed.tertiary),
+            on_tertiary: color(seed.on_tertiary),
+            tertiary_container: color(seed.tertiary_container),
+            on_tertiary_container: color(seed.on_tertiary_container),
+            tertiary_fixed: color(seed.tertiary_fixed),
+            tertiary_fixed_dim: color(seed.tertiary_fixed_dim),
+            on_tertiary_fixed: color(seed.on_tertiary_fixed),
+            on_tertiary_fixed_variant: color(seed.on_tertiary_fixed_variant),
+            error: palette.error,
+            on_error: contrast::foreground_for(palette.error),
+            error_container: color(seed.error_container),
+            on_error_container: color(seed.on_error_container),
+            surface: palette.surface,
+            on_surface,
+            surface_dim: if is_dark {
+                palette.surface_container_lowest
+            } else {
+                palette.surface_container_highest
+            },
+            surface_bright: if is_dark {
+                palette.surface_container_highest
+            } else {
+                palette.surface_container_lowest
+            },
+            surface_container_lowest: palette.surface_container_lowest,
+            surface_container_low: palette.surface_container_low,
+            surface_container: palette.surface_container,
+            surface_container_high: palette.surface_container_high,
+            surface_container_highest: palette.surface_container_highest,
+            on_surface_variant: text(palette.on_surface_variant),
+            outline,
+            outline_variant: if high_contrast {
+                outline
+            } else {
+                palette.outline_variant
+            },
+            shadow: Color::BLACK,
+            scrim: Color::BLACK,
             inverse_surface: on_surface,
-            on_inverse_surface: neutrals.surface,
-            inverse_primary: contrast::ensure(primary, &[on_surface], TEXT_AA),
+            on_inverse_surface: palette.surface,
+            inverse_primary: contrast::ensure(palette.primary, &[on_surface], TEXT_AA),
+            surface_tint: Color::TRANSPARENT,
             chrome,
             semantic: SemanticColors {
                 primary_text,
-                error_text: text(status.error),
-                success: text(status.success),
-                warning: text(status.warning),
-                info: text(status.info),
+                error_text: text(palette.error),
+                success: text(palette.success),
+                warning: text(palette.warning),
+                info: text(palette.info),
                 link: primary_text,
             },
+            syntax: palette.syntax.ensure_contrast(&surfaces, text_target),
         }
+    }
+
+    /// Every surface of the theme: the page background, the chrome
+    /// surfaces and the Material surface roles.
+    pub fn surfaces(&self) -> [Color; 13] {
+        [
+            self.background,
+            self.surface,
+            self.surface_dim,
+            self.surface_bright,
+            self.surface_container_lowest,
+            self.surface_container_low,
+            self.surface_container,
+            self.surface_container_high,
+            self.surface_container_highest,
+            self.chrome.title_bar,
+            self.chrome.sidebar,
+            self.chrome.mainbar,
+            self.chrome.dialog,
+        ]
+    }
+
+    /// The color of selected toggles, indicators and focus rings: the
+    /// text-safe primary tone.
+    pub fn indicator(&self) -> Color {
+        self.semantic.primary_text
+    }
+
+    /// The content color drawn on top of [`ColorRoles::indicator`].
+    pub fn on_indicator(&self) -> Color {
+        contrast::foreground_for(self.indicator())
+    }
+
+    /// The fill of selected controls and progress: `primary` when it stands
+    /// out 3:1 from the surface, the page background and the surface
+    /// container, otherwise the [`ColorRoles::indicator`].
+    pub fn selected_fill(&self) -> Color {
+        let backgrounds = [self.surface, self.background, self.surface_container];
+
+        if contrast::min_ratio(self.primary, &backgrounds) >= NON_TEXT_AA {
+            self.primary
+        } else {
+            self.indicator()
+        }
+    }
+}
+
+/// The text contrast target of a contrast level.
+fn text_target(contrast: Contrast) -> f32 {
+    match contrast {
+        Contrast::Standard => TEXT_AA,
+        Contrast::High => TEXT_AAA,
     }
 }
 

@@ -16,6 +16,7 @@
 //! OITO2 widgets.
 
 mod focusable;
+pub mod helpers;
 pub mod popover;
 
 pub use focusable::{Focusable, focusable};

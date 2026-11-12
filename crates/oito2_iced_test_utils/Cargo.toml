@@ -1,0 +1,20 @@
+[package]
+name = "oito2_iced_test_utils"
+description = "Test helpers of the OITO2 Iced crates: simulator settings, snapshot pixels and tolerant golden images."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+iced = { workspace = true, features = ["advanced", "x11", "wayland", "tiny-skia"] }
+iced_test.workspace = true
+oito2_iced.workspace = true
+png.workspace = true
+
+[lints]
+workspace = true

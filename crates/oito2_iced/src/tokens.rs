@@ -14,8 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 //! Design tokens: radii, spacing, sizes, accent colors and the neutral and
-//! status palettes. The values equal `tokens.json` of the `oito2_ui` parity
-//! fixtures.
+//! status palettes, and the type scale.
 
 use iced::Color;
 
@@ -71,16 +70,111 @@ pub mod sizes {
     pub const FOCUS_BORDER_WIDTH: f32 = 2.0;
     /// Size of the window control buttons.
     pub const WINDOW_CONTROL_SIZE: f32 = 24.0;
+    /// Height of progress bars.
+    pub const PROGRESS_HEIGHT: f32 = 6.0;
+    /// Width of the window control buttons in the Windows style.
+    pub const WINDOWS_WINDOW_CONTROL_WIDTH: f32 = 46.0;
+    /// Smallest target of a control used with a pointer.
+    pub const MIN_POINTER_TARGET: f32 = 24.0;
+    /// Smallest target of a control used by touch.
+    pub const MIN_TOUCH_TARGET: f32 = 48.0;
 }
 
-/// Text sizes, in logical pixels.
+/// Typography: text sizes and the type scale.
 pub mod typography {
+    use iced::font::Weight;
+
     /// Body text, large.
     pub const BODY_LARGE_SIZE: f32 = 16.0;
     /// Body text, medium: the default size.
     pub const BODY_MEDIUM_SIZE: f32 = 14.0;
     /// Body text, small.
     pub const BODY_SMALL_SIZE: f32 = 12.0;
+    /// Weight of emphasized text: titles, headlines and large labels.
+    pub const EMPHASIS_WEIGHT: Weight = Weight::Semibold;
+    /// System font families tried, in order, for glyphs the embedded font
+    /// lacks.
+    pub const FONT_FAMILY_FALLBACK: [&str; 6] = [
+        "Ubuntu",
+        "Cantarell",
+        "Roboto",
+        "Segoe UI",
+        "SF Pro Text",
+        "Noto Sans",
+    ];
+
+    /// One style of the type scale.
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub struct TextStyle {
+        /// Font size, in logical pixels.
+        pub size: f32,
+        /// Line height, in logical pixels.
+        pub line_height: f32,
+        /// Font weight.
+        pub weight: Weight,
+        /// Extra space between letters, in logical pixels.
+        pub letter_spacing: f32,
+    }
+
+    const fn style(size: f32, line_height: f32, weight: Weight, letter_spacing: f32) -> TextStyle {
+        TextStyle {
+            size,
+            line_height,
+            weight,
+            letter_spacing,
+        }
+    }
+
+    /// Display, large.
+    pub const DISPLAY_LARGE: TextStyle = style(57.0, 63.84, Weight::Normal, -0.25);
+    /// Display, medium.
+    pub const DISPLAY_MEDIUM: TextStyle = style(45.0, 52.2, Weight::Normal, 0.0);
+    /// Display, small.
+    pub const DISPLAY_SMALL: TextStyle = style(36.0, 43.92, Weight::Normal, 0.0);
+    /// Headline, large.
+    pub const HEADLINE_LARGE: TextStyle = style(32.0, 40.0, Weight::Semibold, 0.0);
+    /// Headline, medium.
+    pub const HEADLINE_MEDIUM: TextStyle = style(28.0, 36.12, Weight::Semibold, 0.0);
+    /// Headline, small.
+    pub const HEADLINE_SMALL: TextStyle = style(24.0, 31.92, Weight::Semibold, 0.0);
+    /// Title, large.
+    pub const TITLE_LARGE: TextStyle = style(22.0, 27.94, Weight::Semibold, 0.0);
+    /// Title, medium.
+    pub const TITLE_MEDIUM: TextStyle = style(16.0, 24.0, Weight::Semibold, 0.15);
+    /// Title, small.
+    pub const TITLE_SMALL: TextStyle = style(14.0, 20.02, Weight::Semibold, 0.1);
+    /// Body, large.
+    pub const BODY_LARGE: TextStyle = style(16.0, 24.0, Weight::Normal, 0.5);
+    /// Body, medium: the default text style.
+    pub const BODY_MEDIUM: TextStyle = style(14.0, 20.02, Weight::Normal, 0.25);
+    /// Body, small.
+    pub const BODY_SMALL: TextStyle = style(12.0, 15.96, Weight::Normal, 0.4);
+    /// Label, large: buttons.
+    pub const LABEL_LARGE: TextStyle = style(14.0, 20.02, Weight::Semibold, 0.1);
+    /// Label, medium.
+    pub const LABEL_MEDIUM: TextStyle = style(12.0, 15.96, Weight::Medium, 0.5);
+    /// Label, small.
+    pub const LABEL_SMALL: TextStyle = style(11.0, 15.95, Weight::Medium, 0.5);
+
+    /// Every style of the scale with its name, from display large to label
+    /// small.
+    pub const SCALE: [(&str, TextStyle); 15] = [
+        ("displayLarge", DISPLAY_LARGE),
+        ("displayMedium", DISPLAY_MEDIUM),
+        ("displaySmall", DISPLAY_SMALL),
+        ("headlineLarge", HEADLINE_LARGE),
+        ("headlineMedium", HEADLINE_MEDIUM),
+        ("headlineSmall", HEADLINE_SMALL),
+        ("titleLarge", TITLE_LARGE),
+        ("titleMedium", TITLE_MEDIUM),
+        ("titleSmall", TITLE_SMALL),
+        ("bodyLarge", BODY_LARGE),
+        ("bodyMedium", BODY_MEDIUM),
+        ("bodySmall", BODY_SMALL),
+        ("labelLarge", LABEL_LARGE),
+        ("labelMedium", LABEL_MEDIUM),
+        ("labelSmall", LABEL_SMALL),
+    ];
 }
 
 /// The accent colors a theme can use as its primary color.
@@ -222,6 +316,8 @@ pub struct Status {
     pub error: Color,
     /// Information.
     pub info: Color,
+    /// Links.
+    pub link: Color,
 }
 
 impl Status {
@@ -231,6 +327,7 @@ impl Status {
         warning: Color::from_rgb8(0x88, 0x60, 0x03),
         error: Color::from_rgb8(0xC0, 0x1C, 0x28),
         info: Color::from_rgb8(0x19, 0x66, 0xC2),
+        link: Color::from_rgb8(0x19, 0x66, 0xC2),
     };
 
     /// The dark status colors.
@@ -239,5 +336,6 @@ impl Status {
         warning: Color::from_rgb8(0xF8, 0xE4, 0x5C),
         error: Color::from_rgb8(0xFF, 0x7B, 0x63),
         info: Color::from_rgb8(0x78, 0xAE, 0xED),
+        link: Color::from_rgb8(0x78, 0xAE, 0xED),
     };
 }

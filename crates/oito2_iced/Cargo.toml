@@ -16,12 +16,22 @@ publish = false
 # the renderers.
 iced = { workspace = true, features = ["advanced", "x11", "wayland", "thread-pool"] }
 material-colors.workspace = true
+oito2_foundation.workspace = true
+
+[features]
+default = ["svg"]
+# Style catalog of the vector image widget.
+svg = ["iced/svg"]
+# Style catalog of the QR code widget.
+qr_code = ["iced/qr_code"]
+# Style catalog of the Markdown widget.
+markdown = ["iced/markdown"]
 
 [dev-dependencies]
 iced = { workspace = true, features = ["advanced", "x11", "wayland", "tiny-skia"] }
 iced_test.workspace = true
+oito2_iced_test_utils.workspace = true
 serde_json.workspace = true
-png.workspace = true
 
 [lints]
 workspace = true

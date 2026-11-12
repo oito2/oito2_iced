@@ -13,13 +13,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-//! Checks the embedded Inter instances: each weight is rendered with Inter
-//! instead of a system fallback font, and the same text at a heavier weight
-//! covers more pixels.
+//! Checks the embedded Inter instances: each weight, upright and italic, is
+//! rendered with Inter instead of a system fallback font, and the same text
+//! at a heavier weight covers more pixels.
 
-mod support;
+use oito2_iced_test_utils as support;
 
 use iced::Font;
+use iced::font::Style;
 use iced::font::Weight;
 use iced::widget::{column, text};
 use iced_test::simulator;
@@ -67,6 +68,25 @@ fn every_weight_renders_with_inter() {
         });
 
         assert!(inter != fallback, "{weight:?} renders with a fallback font");
+    }
+}
+
+#[test]
+fn every_italic_weight_renders_with_inter() {
+    for weight in WEIGHTS {
+        let italic = render(font::inter_italic(weight));
+        let upright = render(font::inter(weight));
+        let fallback = render(Font {
+            weight,
+            style: Style::Italic,
+            ..Font::with_name("No Such Family")
+        });
+
+        assert!(italic != upright, "{weight:?} italic renders upright");
+        assert!(
+            italic != fallback,
+            "{weight:?} italic renders with a fallback font"
+        );
     }
 }
 

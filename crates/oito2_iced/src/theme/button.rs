@@ -16,7 +16,7 @@
 //! Button classes.
 
 use iced::widget::button::{Catalog, Status, Style, StyleFn};
-use iced::{Background, Border, Color};
+use iced::{Background, Border, Color, Shadow, Vector};
 
 use super::{
     DISABLED_CONTAINER_OPACITY, DISABLED_CONTENT_OPACITY, HOVER_OPACITY, PRESSED_OPACITY,
@@ -30,6 +30,9 @@ pub enum Class<'a> {
     Filled,
     /// Secondary container background: secondary actions.
     Tonal,
+    /// Raised neutral surface that gains a shadow on hover: the neutral
+    /// desktop button.
+    Elevated,
     /// Transparent with an outline.
     Outlined,
     /// Transparent, primary text: low-emphasis actions.
@@ -66,6 +69,7 @@ impl Catalog for Theme {
                 roles.on_secondary_container,
                 None,
             ),
+            Class::Elevated => (roles.surface_container_high, roles.on_surface, None),
             Class::Outlined => (
                 TRANSPARENT,
                 roles.semantic.primary_text,
@@ -107,10 +111,20 @@ impl Catalog for Theme {
             None => Border::default().rounded(radius),
         };
 
+        let shadow = match (class, status) {
+            (Class::Elevated, Status::Hovered) => Shadow {
+                color: roles.shadow.scale_alpha(0.2),
+                offset: Vector::new(0.0, 1.0),
+                blur_radius: 3.0,
+            },
+            _ => Shadow::default(),
+        };
+
         Style {
             background: (background != TRANSPARENT).then_some(Background::Color(background)),
             text_color,
             border,
+            shadow,
             ..Style::default()
         }
     }

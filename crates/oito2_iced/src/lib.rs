@@ -17,23 +17,36 @@
 //! the OITO2 color roles, styled widgets, keyboard focus for every control,
 //! an anchored overlay and client-side window chrome.
 //!
-//! This is the F0 prototype: the theme implements [`iced::theme::Base`] and
-//! the catalogs of `button`, `checkbox`, `container`, `text` and
-//! `text_input`; [`widget::focusable`] gives keyboard focus to any element;
-//! [`focus::navigation`] moves the focus with Tab and Shift+Tab;
-//! [`widget::popover()`] opens an anchored panel; [`window`] draws the title
-//! bar and the resize handles of an undecorated window.
+//! - [`Theme`] resolves every color role of the OITO2 base themes (each
+//!   accent, light and dark, standard and high contrast) and implements the
+//!   style catalog of every native Iced widget; [`theme`] holds the classes.
+//! - [`tokens`] holds radii, spacing, sizes, accents, palettes and the type
+//!   scale; [`font`] the embedded Inter and JetBrains Mono fonts.
+//! - [`focus`] gives keyboard focus to any element, moves it with Tab, the
+//!   arrow keys and custom operations, and draws the focus ring.
+//! - [`widget`] holds the OITO2 widgets; [`window`] the title bar and resize
+//!   handles of an undecorated window; [`animation`] the Material motion.
+//! - [`l10n`], [`format`](mod@format), [`collections`] and [`shortcuts`] work without a
+//!   user interface: strings in English and Brazilian Portuguese, byte sizes
+//!   and relative times, list, selection and tree models, and key chords.
+//! - [`foundation`] re-exports the platform rules shared by the OITO2
+//!   interfaces: desktop environment, window buttons and system settings.
 
 #![deny(missing_docs)]
 
 pub mod animation;
+pub mod collections;
 pub mod focus;
 pub mod font;
+pub mod format;
+pub mod l10n;
+pub mod shortcuts;
 pub mod theme;
 pub mod tokens;
 pub mod widget;
 pub mod window;
 
+pub use oito2_foundation as foundation;
 pub use theme::Theme;
 
 /// An [`iced::Element`] styled by the OITO2 [`Theme`].

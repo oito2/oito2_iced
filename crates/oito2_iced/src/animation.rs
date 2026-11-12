@@ -35,14 +35,24 @@ pub mod duration {
 }
 
 /// The Material "emphasized" curve: a fast start, then a long, gentle
-/// deceleration. Equal to Flutter's `Curves.easeInOutCubicEmphasized`.
+/// deceleration.
 pub const EMPHASIZED: Easing = Easing::Custom(emphasized);
 
-/// Cubic ease-out. Equal to Flutter's `Curves.easeOutCubic`.
+/// Cubic ease-out.
 pub const EASE_OUT_CUBIC: Easing = Easing::Custom(ease_out_cubic);
 
-/// Cubic ease-in-out. Equal to Flutter's `Curves.easeInOutCubic`.
+/// Cubic ease-in-out.
 pub const EASE_IN_OUT_CUBIC: Easing = Easing::Custom(ease_in_out_cubic);
+
+/// Returns `duration`, or zero when the user asked for reduced motion, so
+/// the animation jumps to its end.
+pub fn motion_duration(duration: Duration, reduce_motion: bool) -> Duration {
+    if reduce_motion {
+        Duration::ZERO
+    } else {
+        duration
+    }
+}
 
 /// An [`Animation`] with the emphasized curve and the given duration.
 pub fn emphasized_animation<T>(state: T, duration: Duration) -> Animation<T>

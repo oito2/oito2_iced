@@ -13,13 +13,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-//! Helpers shared by the simulator tests: settings with the embedded fonts,
-//! access to the pixels of a snapshot and a tolerant golden comparison.
+//! Helpers for the tests of the OITO2 Iced crates: simulator settings with
+//! the embedded fonts, the pixels of a snapshot, and golden images compared
+//! with a tolerance.
+//!
+//! Run the tests with `ICED_TEST_BACKEND=tiny-skia`; refresh the goldens
+//! with `OITO2_UPDATE_GOLDENS=1` and look at every changed image before
+//! accepting it.
 
-#![allow(dead_code)]
+#![deny(missing_docs)]
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use iced::Settings;
@@ -43,8 +48,11 @@ pub fn settings() -> Settings {
 
 /// An RGBA image.
 pub struct Image {
+    /// Width, in physical pixels.
     pub width: u32,
+    /// Height, in physical pixels.
     pub height: u32,
+    /// Pixels, row by row, four bytes per pixel.
     pub rgba: Vec<u8>,
     /// File name written by the simulator: `<name>-<renderer>.png`.
     pub file_name: String,
@@ -56,19 +64,29 @@ pub struct Image {
 pub fn pixels(snapshot: &Snapshot, name: &str) -> Image {
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-    let directory = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
-        "snapshot-{}-{}",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
+    let directory = std::env::temp_dir()
+        .join("oito2_iced_test_utils")
+        .join(format!(
+            "snapshot-{}-{}",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
     let _ = fs::remove_dir_all(&directory);
     fs::create_dir_all(&directory).expect("create the snapshot directory");
 
+    let image = written(snapshot, &directory, name);
+    let _ = fs::remove_dir_all(&directory);
+
+    image
+}
+
+/// Writes `snapshot` into the empty `directory` and reads the file back.
+fn written(snapshot: &Snapshot, directory: &Path, name: &str) -> Image {
     snapshot
         .matches_image(directory.join(format!("{name}.png")))
         .expect("write the snapshot");
 
-    let entry = fs::read_dir(&directory)
+    let entry = fs::read_dir(directory)
         .expect("read the snapshot directory")
         .next()
         .expect("the snapshot was written")
@@ -97,7 +115,8 @@ pub fn read_png(path: &Path) -> Image {
     }
 }
 
-fn write_png(path: &Path, image: &Image) {
+/// Writes an RGBA PNG, creating its directory.
+pub fn write_png(path: &Path, image: &Image) {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).expect("create the golden directory");
     }
@@ -135,16 +154,17 @@ pub fn difference(a: &Image, b: &Image) -> f64 {
     differing as f64 / (a.width as f64 * a.height as f64)
 }
 
-/// Compares a snapshot with `tests/goldens/<file name>`, allowing
+/// Compares a snapshot with `<directory>/<name>-<renderer>.png`, allowing
 /// [`TOLERANCE`] of differing pixels. With `OITO2_UPDATE_GOLDENS=1` the
 /// golden is (re)written instead; a missing golden fails the test. On a
 /// mismatch the actual image is written next to the golden as
-/// `<name>.actual.png`.
-pub fn assert_golden(snapshot: &Snapshot, name: &str) {
+/// `<name>-<renderer>.actual.png`.
+///
+/// The [`golden!`] macro calls it with the `tests/goldens` directory of the
+/// calling crate.
+pub fn assert_golden_in(directory: &Path, snapshot: &Snapshot, name: &str) {
     let actual = pixels(snapshot, name);
-    let golden = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/goldens")
-        .join(&actual.file_name);
+    let golden = directory.join(&actual.file_name);
 
     if std::env::var("OITO2_UPDATE_GOLDENS").as_deref() == Ok("1") {
         write_png(&golden, &actual);
@@ -174,4 +194,28 @@ pub fn assert_golden(snapshot: &Snapshot, name: &str) {
         TOLERANCE * 100.0,
         actual_path.display()
     );
+}
+
+/// Compares a snapshot with its golden image in the `tests/goldens`
+/// directory of the calling crate. See [`assert_golden_in`].
+#[macro_export]
+macro_rules! golden {
+    ($snapshot:expr, $name:expr) => {
+        $crate::assert_golden_in(
+            &::std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/goldens"),
+            $snapshot,
+            $name,
+        )
+    };
+}
+
+/// The color of the pixel at `point`, given in logical pixels of a window
+/// `logical_width` wide; the image may be rendered at a higher scale.
+pub fn pixel_at(image: &Image, point: iced::Point, logical_width: f32) -> iced::Color {
+    let scale = image.width as f32 / logical_width;
+    let (x, y) = ((point.x * scale) as u32, (point.y * scale) as u32);
+    let index = ((y * image.width + x) * 4) as usize;
+    let [r, g, b, a] = [0, 1, 2, 3].map(|offset| image.rgba[index + offset]);
+
+    iced::Color::from_rgba8(r, g, b, f32::from(a) / 255.0)
 }

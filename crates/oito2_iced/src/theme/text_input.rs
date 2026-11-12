@@ -18,7 +18,7 @@
 use iced::widget::text_input::{Catalog, Status, Style, StyleFn};
 use iced::{Background, Border};
 
-use super::{DISABLED_CONTAINER_OPACITY, DISABLED_CONTENT_OPACITY, Theme};
+use super::{DISABLED_CONTAINER_OPACITY, DISABLED_CONTENT_OPACITY, SELECTION_OPACITY, Theme};
 use crate::tokens::{radius, sizes};
 
 /// The style class of a text input.
@@ -77,7 +77,7 @@ impl Catalog for Theme {
             icon: roles.on_surface_variant,
             placeholder: roles.on_surface_variant,
             value,
-            selection: roles.primary.scale_alpha(0.3),
+            selection: roles.primary.scale_alpha(SELECTION_OPACITY),
         }
     }
 }

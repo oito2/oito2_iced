@@ -56,7 +56,7 @@ impl Catalog for Theme {
         };
 
         let (background, border_color) = match (is_checked, disabled) {
-            (true, false) => (roles.primary, roles.primary),
+            (true, false) => (roles.indicator(), roles.indicator()),
             (true, true) => {
                 let faded = roles.on_surface.scale_alpha(DISABLED_CONTENT_OPACITY);
                 (faded, TRANSPARENT)
@@ -79,11 +79,11 @@ impl Catalog for Theme {
             icon_color: if disabled {
                 roles.surface
             } else {
-                roles.on_primary
+                roles.on_indicator()
             },
             border: Border::default()
                 .color(border_color)
-                .width(if is_checked { 0.0 } else { 2.0 })
+                .width(if is_checked { 0.0 } else { 1.5 })
                 .rounded(radius::CHECK),
             text_color: Some(if disabled {
                 roles.on_surface.scale_alpha(DISABLED_CONTENT_OPACITY)

@@ -20,15 +20,15 @@ use iced::advanced::widget::operation::{self, Operation};
 use iced::advanced::widget::{Id, Tree, Widget, tree};
 use iced::advanced::{Clipboard, Shell, overlay, renderer};
 use iced::keyboard::{self, key};
-use iced::{Border, Element, Event, Length, Rectangle, Size, Vector, mouse};
+use iced::{Element, Event, Length, Rectangle, Size, Vector, mouse};
 
 use crate::Theme;
-use crate::tokens::{radius, sizes};
+use crate::tokens::radius;
 
 /// Wraps `content` so it takes part in keyboard focus traversal.
 ///
-/// While focused, the wrapper draws the focus ring of the theme over the
-/// bounds of the content and publishes its activation message on Enter or
+/// While focused, the wrapper draws the focus ring of the theme just outside
+/// the bounds of the content and publishes its activation message on Enter or
 /// Space. A mouse press outside the content removes the focus.
 pub fn focusable<'a, Message, Renderer>(
     content: impl Into<Element<'a, Message, Theme, Renderer>>,
@@ -238,17 +238,7 @@ where
         }
 
         if tree.state.downcast_ref::<State>().is_focused {
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: layout.bounds(),
-                    border: Border::default()
-                        .color(theme.focus_ring())
-                        .width(sizes::FOCUS_BORDER_WIDTH)
-                        .rounded(self.radius),
-                    ..renderer::Quad::default()
-                },
-                iced::Color::TRANSPARENT,
-            );
+            crate::focus::draw_ring(renderer, theme, layout.bounds(), self.radius);
         }
     }
 

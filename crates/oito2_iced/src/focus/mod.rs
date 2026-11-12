@@ -20,8 +20,22 @@
 //! [`focus_next`](iced::advanced::widget::operation::focusable::focus_next)
 //! on Tab and
 //! [`focus_previous`](iced::advanced::widget::operation::focusable::focus_previous)
-//! on Shift+Tab, over every [`focusable`](crate::widget::focusable) and text
+//! on Shift+Tab, over every [`focusable`] and text
 //! input of the view, in layout order.
+//!
+//! [`ring`] draws the focus ring around a group while a widget inside it has
+//! the focus; [`edge_interceptor`] moves the focus inside a group with the
+//! arrow keys and stops at its ends; [`operations`] holds the focus
+//! operations they use.
+
+mod edge;
+pub mod operations;
+mod ring;
+
+pub use crate::widget::{Focusable, focusable};
+pub use edge::{EdgeInterceptor, edge_interceptor};
+pub(crate) use ring::draw_ring;
+pub use ring::{Ring, ring};
 
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::operation::{self, Operation, Outcome};
@@ -47,26 +61,32 @@ pub struct Navigation<'a, Message, Theme = crate::Theme, Renderer = iced::Render
     content: Element<'a, Message, Theme, Renderer>,
 }
 
-/// Runs a focus operation, and the operations it chains, over `content`.
-fn run<Message, Theme, Renderer>(
+/// Runs an operation, and the operations it chains, over `content`, and
+/// returns its result.
+pub(crate) fn run<T, Message, Theme, Renderer>(
     content: &mut Element<'_, Message, Theme, Renderer>,
     tree: &mut Tree,
     layout: Layout<'_>,
     renderer: &Renderer,
-    operation: impl Operation + 'static,
-) where
+    operation: impl Operation<T> + 'static,
+) -> Option<T>
+where
     Renderer: renderer::Renderer,
 {
-    let mut operation: Box<dyn Operation> = Box::new(operation);
+    let mut operation: Box<dyn Operation<T>> = Box::new(operation);
 
     loop {
-        content
-            .as_widget_mut()
-            .operate(tree, layout, renderer, operation.as_mut());
+        content.as_widget_mut().operate(
+            tree,
+            layout,
+            renderer,
+            &mut operation::black_box(operation.as_mut()),
+        );
 
         match operation.finish() {
             Outcome::Chain(next) => operation = next,
-            Outcome::None | Outcome::Some(()) => break,
+            Outcome::Some(result) => return Some(result),
+            Outcome::None => return None,
         }
     }
 }
@@ -165,7 +185,7 @@ where
             let tree = &mut tree.children[0];
 
             if modifiers.shift() {
-                run(
+                let _ = run(
                     content,
                     tree,
                     content_layout,
@@ -173,7 +193,7 @@ where
                     operation::focusable::focus_previous::<()>(),
                 );
             } else {
-                run(
+                let _ = run(
                     content,
                     tree,
                     content_layout,

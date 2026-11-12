@@ -25,16 +25,26 @@ use crate::tokens::radius;
 pub enum Class<'a> {
     /// No background: inherits the surface below.
     Transparent,
-    /// Window background.
+    /// Page background.
     Background,
     /// Title bar of the window.
     TitleBar,
-    /// Sidebar.
+    /// Narrow sidebar column, such as an icon rail.
     Sidebar,
-    /// Card on the window background: surface with an outline.
+    /// Main bar: the pane beside a sidebar.
+    Mainbar,
+    /// Card on the page background: surface with an outline.
     Card,
-    /// Floating panel: popovers and menus, with a shadow.
+    /// Dialogs, sheets and drawers.
+    Dialog,
+    /// Anchored panels: popovers and hover cards.
     Popover,
+    /// Menus: the surface container with an outline and a shadow.
+    Menu,
+    /// Tooltips: the inverse surface with the small radius.
+    Tooltip,
+    /// The inverse surface with the medium radius: toasts and snack bars.
+    Inverse,
     /// A styling closure.
     Custom(StyleFn<'a, Theme>),
 }
@@ -54,40 +64,66 @@ impl Catalog for Theme {
 
     fn style(&self, class: &Self::Class<'_>) -> Style {
         let roles = self.roles();
+        let outlined = |radius: f32| {
+            Border::default()
+                .color(roles.outline_variant)
+                .width(1.0)
+                .rounded(radius)
+        };
 
         match class {
             Class::Transparent => Style::default(),
             Class::Background => filled(roles.chrome.background, roles.on_surface),
             Class::TitleBar => filled(roles.chrome.title_bar, roles.on_surface),
             Class::Sidebar => filled(roles.chrome.sidebar, roles.on_surface),
+            Class::Mainbar => filled(roles.chrome.mainbar, roles.on_surface),
             Class::Card => Style {
-                border: Border::default()
-                    .color(roles.outline_variant)
-                    .width(1.0)
-                    .rounded(radius::LARGE),
+                border: outlined(radius::LARGE),
                 ..filled(roles.surface, roles.on_surface)
             },
+            Class::Dialog => Style {
+                border: outlined(radius::WINDOW),
+                shadow: elevation(roles.shadow, 6.0),
+                ..filled(roles.chrome.dialog, roles.on_surface)
+            },
             Class::Popover => Style {
-                border: Border::default()
-                    .color(roles.outline_variant)
-                    .width(1.0)
-                    .rounded(radius::LARGE),
-                shadow: Shadow {
-                    color: Color::BLACK.scale_alpha(0.2),
-                    offset: Vector::new(0.0, 4.0),
-                    blur_radius: 16.0,
-                },
+                border: outlined(radius::LARGE),
+                shadow: elevation(roles.shadow, 4.0),
                 ..filled(roles.surface_container, roles.on_surface)
+            },
+            Class::Menu => Style {
+                border: outlined(radius::MEDIUM),
+                shadow: elevation(roles.shadow, 4.0),
+                ..filled(roles.surface_container, roles.on_surface)
+            },
+            Class::Tooltip => Style {
+                border: Border::default().rounded(radius::SMALL),
+                ..filled(roles.inverse_surface, roles.on_inverse_surface)
+            },
+            Class::Inverse => Style {
+                border: Border::default().rounded(radius::MEDIUM),
+                ..filled(roles.inverse_surface, roles.on_inverse_surface)
             },
             Class::Custom(style) => style(self),
         }
     }
 }
 
+/// A background with its text color.
 fn filled(background: Color, text: Color) -> Style {
     Style {
         background: Some(Background::Color(background)),
         text_color: Some(text),
         ..Style::default()
+    }
+}
+
+/// The shadow of a surface raised to `level`: the offset grows with half
+/// the level and the blur with twice the level.
+pub fn elevation(shadow: Color, level: f32) -> Shadow {
+    Shadow {
+        color: shadow.scale_alpha(0.2),
+        offset: Vector::new(0.0, level / 2.0),
+        blur_radius: level * 2.0,
     }
 }

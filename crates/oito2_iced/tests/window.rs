@@ -16,7 +16,7 @@
 //! Window chrome: the title bar and the resize handles publish the window
 //! actions for each pointer gesture.
 
-mod support;
+use oito2_iced_test_utils as support;
 
 use iced::widget::{column, text};
 use iced::window::Direction;

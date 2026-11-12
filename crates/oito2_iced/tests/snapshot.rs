@@ -17,13 +17,19 @@
 //! 0.5 % of the pixels. Run with `ICED_TEST_BACKEND=tiny-skia`; refresh the
 //! goldens with `OITO2_UPDATE_GOLDENS=1`.
 
-mod support;
+use oito2_iced_test_utils as support;
 
 use iced::keyboard::key::Named;
-use iced::widget::{button, checkbox, column, container, row, text, text_input};
+use iced::widget::{
+    button, checkbox, column, container, pick_list, progress_bar, radio, row, rule, slider, text,
+    text_input, toggler,
+};
 use iced_test::simulator;
 use oito2_iced::theme::button::Class as ButtonClass;
 use oito2_iced::theme::container::Class as ContainerClass;
+use oito2_iced::theme::progress_bar::Class as ProgressClass;
+use oito2_iced::theme::{Brightness, Contrast};
+use oito2_iced::tokens::Accent;
 use oito2_iced::widget::focusable;
 use oito2_iced::{Element, Theme, focus};
 
@@ -31,6 +37,7 @@ fn view() -> Element<'static, ()> {
     let buttons = row![
         focusable(button("Filled").class(ButtonClass::Filled).on_press(())),
         focusable(button("Tonal").class(ButtonClass::Tonal).on_press(())),
+        focusable(button("Elevated").class(ButtonClass::Elevated).on_press(())),
         focusable(button("Outlined").class(ButtonClass::Outlined).on_press(())),
         focusable(button("Text").class(ButtonClass::Text).on_press(())),
         focusable(button("Danger").class(ButtonClass::Danger).on_press(())),
@@ -41,26 +48,61 @@ fn view() -> Element<'static, ()> {
     let inputs = row![
         checkbox(true).label("Checked").on_toggle(|_| ()),
         checkbox(false).label("Unchecked").on_toggle(|_| ()),
-        text_input("Placeholder", "").width(200),
+        text_input("Placeholder", "").width(180),
+        pick_list(["One", "Two"], Some("One"), |_| ()).width(120),
+    ]
+    .spacing(16)
+    .align_y(iced::Alignment::Center);
+
+    let selection = row![
+        radio("On", 1, Some(1), |_| ()),
+        radio("Off", 2, Some(1), |_| ()),
+        toggler(true).label("On").on_toggle(|_| ()),
+        toggler(false).label("Off").on_toggle(|_| ()),
+        slider(0.0..=1.0, 0.4, |_| ()).width(160),
+    ]
+    .spacing(16)
+    .align_y(iced::Alignment::Center);
+
+    let progress = row![
+        progress_bar(0.0..=1.0, 0.6).length(140).girth(6),
+        progress_bar(0.0..=1.0, 0.6)
+            .length(140)
+            .girth(6)
+            .class(ProgressClass::Success),
+        progress_bar(0.0..=1.0, 0.6)
+            .length(140)
+            .girth(6)
+            .class(ProgressClass::Error),
     ]
     .spacing(16);
 
     focus::navigation(
-        container(column![text("Snapshot"), buttons, inputs].spacing(16))
-            .class(ContainerClass::Card)
-            .padding(16),
+        container(
+            column![
+                text("Snapshot"),
+                buttons,
+                inputs,
+                rule::horizontal(1),
+                selection,
+                progress
+            ]
+            .spacing(16),
+        )
+        .class(ContainerClass::Card)
+        .padding(16),
     )
     .into()
 }
 
 fn snapshot(theme: &Theme, name: &str) {
-    let mut ui = simulator::Simulator::with_size(support::settings(), (640.0, 200.0), view());
+    let mut ui = simulator::Simulator::with_size(support::settings(), (760.0, 300.0), view());
 
     // Focus the first button so the focus ring is part of the golden.
     ui.tap_key(Named::Tab);
 
     let snapshot = ui.snapshot(theme).expect("snapshot");
-    support::assert_golden(&snapshot, name);
+    oito2_iced_test_utils::golden!(&snapshot, name);
 }
 
 #[test]
@@ -71,6 +113,20 @@ fn widgets_light() {
 #[test]
 fn widgets_dark() {
     snapshot(&Theme::dark(), "widgets_dark");
+}
+
+#[test]
+fn widgets_light_high_contrast() {
+    let theme = Theme::base(Brightness::Light, Accent::Blue.color(), Contrast::High);
+
+    snapshot(&theme, "widgets_light_high_contrast");
+}
+
+#[test]
+fn widgets_dark_high_contrast() {
+    let theme = Theme::base(Brightness::Dark, Accent::Blue.color(), Contrast::High);
+
+    snapshot(&theme, "widgets_dark_high_contrast");
 }
 
 #[test]

@@ -18,20 +18,21 @@ Rules defined for this project. They take precedence over `AGENTS.md` and over t
 ## Design Source of Truth
 
 - `oito2_ui` (Dart) defines tokens, colors, strings and behaviour; this project never invents a color, radius or height. A design change lands there first and reaches `tools/parity/fixtures`.
-- The parity fixtures are copied into `crates/*/tests/fixtures/parity/` only by copying the files again and recording the source commit in `crates/*/tests/fixtures/parity/README.md`.
+- The parity fixtures reach `crates/*/tests/fixtures/parity/` only through `cargo run -p oito2_iced_parity -- sync <path to oito2_ui>`, which records the source commit in `tools/parity/source.json` and in each fixture README; `parity.yml` runs `check` against `oito2_ui@main` every week.
 
 ## Source Files
 
 - Every hand-written `.rs` file starts with the GPL-3.0 header "Copyright (C) 2026  OITO2" (two spaces, uppercase), as in `crates/oito2_iced/src/lib.rs`.
 - Toolchain 1.99.0 (`rust-toolchain.toml`), edition 2024, MSRV 1.97 (set by `material-colors` 0.5). Lints come from the workspace: `unsafe_code = "forbid"`, clippy `unwrap_used`, `panic` and `todo` denied; `clippy.toml` relaxes them inside `#[test]` functions only, so test helpers use `assert!` instead of `panic!`. Every public item has rustdoc (`#![deny(missing_docs)]`).
 - Public type names carry no `Oito2` prefix. Style classes are enums with the OITO2 variants plus `Custom(StyleFn)`, and implement `From<StyleFn>` so the `style` builder of each Iced widget keeps working.
-- The `oito2_iced` crate depends on `iced` with `default-features = false` and only `advanced`, `x11`, `wayland` and `thread-pool`; applications choose the renderers.
+- The `oito2_iced` crate depends on `iced` with `default-features = false` and only `advanced`, `x11`, `wayland` and `thread-pool`; applications choose the renderers. Catalogs of feature-gated Iced widgets sit behind crate features that forward to Iced (`svg`, on by default; `qr_code`; `markdown`).
 
 ## Testing & Verification
 
-- Run before reporting: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked`, `cargo deny check`, `ICED_TEST_BACKEND=tiny-skia cargo test --workspace --locked`, `cargo +1.97 check --workspace --locked`.
+- Run before reporting: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`, `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked`, `cargo deny check`, `ICED_TEST_BACKEND=tiny-skia cargo test --workspace --all-features --locked`, `cargo +1.97 check --workspace --all-features --locked`. Code that differs per platform is also checked with `cargo clippy --target x86_64-pc-windows-msvc` and `--target aarch64-apple-darwin`.
 - Behaviour tests use the `iced_test` simulator; the focus traversal lives in `focus::navigation` (a widget, not a subscription) so the simulator exercises it.
-- Goldens live in `crates/*/tests/goldens/<name>-<renderer>.png`, compared with 0.5 % tolerance by `tests/support`; `OITO2_UPDATE_GOLDENS=1` rewrites them, and a missing golden fails. Look at every new or changed golden before accepting it.
+- Fonts are static instances made by `tools/fonts/make_instances.py` from the `oito2_ui` variable fonts; a variable font is never embedded, because the text stack only matches faces by exact weight.
+- Test helpers live in the `oito2_iced_test_utils` crate (`publish = false`): simulator settings with the embedded fonts, snapshot pixels and the `golden!` macro. Goldens live in `crates/*/tests/goldens/<name>-<renderer>.png`, compared with 0.5 % tolerance; `OITO2_UPDATE_GOLDENS=1` rewrites them, and a missing golden fails. Look at every new or changed golden before accepting it.
 - Never automate clicks or input on the user's real desktop; manual desktop checks (LiveCDs, window managers) are the user's.
 
 ## Git

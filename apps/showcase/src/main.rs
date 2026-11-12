@@ -36,14 +36,14 @@ use oito2_iced::widget::{focusable, popover};
 use oito2_iced::{Theme, focus, font};
 
 fn main() -> iced::Result {
-    iced::application(Showcase::new, Showcase::update, Showcase::view)
+    let application = iced::application(Showcase::new, Showcase::update, Showcase::view)
         .title("OITO2 Iced")
         .theme(Showcase::theme)
-        .subscription(Showcase::subscription)
-        .font(font::INTER_REGULAR)
-        .font(font::INTER_MEDIUM)
-        .font(font::INTER_SEMIBOLD)
-        .font(font::INTER_BOLD)
+        .subscription(Showcase::subscription);
+
+    font::INTER_FONTS
+        .into_iter()
+        .fold(application, |application, bytes| application.font(bytes))
         .default_font(font::INTER)
         .window(window::Settings {
             size: iced::Size::new(960.0, 680.0),

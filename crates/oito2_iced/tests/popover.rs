@@ -16,7 +16,7 @@
 //! Popover: the panel shows while open and publishes the dismiss message on
 //! a click outside or on Escape, but not on a click inside.
 
-mod support;
+use oito2_iced_test_utils as support;
 
 use iced::keyboard::key::Named;
 use iced::widget::{button, column, text};

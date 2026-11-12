@@ -24,18 +24,38 @@ pub mod button;
 pub mod checkbox;
 pub mod container;
 pub mod contrast;
+pub mod float;
+#[cfg(feature = "markdown")]
+pub mod markdown;
+pub mod menu;
+pub mod pane_grid;
+pub mod pick_list;
+pub mod progress_bar;
+#[cfg(feature = "qr_code")]
+pub mod qr_code;
+pub mod radio;
 mod roles;
+pub mod rule;
+pub mod scrollable;
+pub mod slider;
+#[cfg(feature = "svg")]
+pub mod svg;
+pub mod table;
 pub mod text;
+pub mod text_editor;
 pub mod text_input;
+pub mod toggler;
 
 use std::sync::Arc;
 
-use iced::theme::{Base, Mode, Palette, Style};
+use iced::theme::{self as iced_theme, Base, Mode, Style};
 use iced::{Color, color};
 
-use crate::tokens::Accent;
+use oito2_foundation::Density;
 
-pub use roles::{ChromeColors, ColorRoles, SemanticColors, tonal_spot};
+use crate::tokens::{Accent, sizes};
+
+pub use roles::{ChromeColors, ColorRoles, Palette, SemanticColors, SyntaxColors, tonal_spot};
 
 /// Hover state layer opacity.
 pub const HOVER_OPACITY: f32 = 0.08;
@@ -45,6 +65,8 @@ pub const PRESSED_OPACITY: f32 = 0.10;
 pub const DISABLED_CONTAINER_OPACITY: f32 = 0.12;
 /// Opacity of the content of a disabled control.
 pub const DISABLED_CONTENT_OPACITY: f32 = 0.38;
+/// Opacity of the primary color behind selected text.
+pub const SELECTION_OPACITY: f32 = 0.35;
 
 /// Light or dark.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -56,6 +78,17 @@ pub enum Brightness {
     Dark,
 }
 
+/// The contrast level of a theme.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Contrast {
+    /// Text reaches 4.5:1 and control borders 3:1 against every surface.
+    #[default]
+    Standard,
+    /// Text reaches 7:1 and control borders 4.5:1 against every surface;
+    /// dividers take the control border color.
+    High,
+}
+
 /// The OITO2 theme. Cheap to clone: the resolved roles are shared.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Theme {
@@ -65,25 +98,42 @@ pub struct Theme {
 #[derive(Debug, PartialEq)]
 struct Inner {
     name: String,
-    brightness: Brightness,
-    accent: Accent,
     roles: ColorRoles,
+    density: Density,
 }
 
 impl Theme {
-    /// The base theme for a brightness and an accent.
+    /// The base theme for a brightness and an accent, at standard contrast.
     pub fn new(brightness: Brightness, accent: Accent) -> Self {
-        let mode = match brightness {
-            Brightness::Light => "light",
-            Brightness::Dark => "dark",
-        };
+        Self::base(brightness, accent.color(), Contrast::Standard).with_name(base_name(
+            accent.name(),
+            brightness,
+            Contrast::Standard,
+        ))
+    }
 
+    /// The base theme for a brightness, any accent color and a contrast
+    /// level, such as the accent color of the desktop.
+    pub fn base(brightness: Brightness, accent: Color, contrast: Contrast) -> Self {
+        let [r, g, b, _] = accent.into_rgba8();
+        let name = base_name(&format!("#{r:02X}{g:02X}{b:02X}"), brightness, contrast);
+
+        Self::from_roles(name, ColorRoles::base(brightness, accent, contrast))
+    }
+
+    /// The theme of a palette, such as a preset color theme, resolved at a
+    /// contrast level.
+    pub fn from_palette(name: impl Into<String>, palette: &Palette, contrast: Contrast) -> Self {
+        Self::from_roles(name, ColorRoles::resolve(palette, contrast))
+    }
+
+    /// The theme of already resolved roles.
+    pub fn from_roles(name: impl Into<String>, roles: ColorRoles) -> Self {
         Self {
             inner: Arc::new(Inner {
-                name: format!("oito2 {} {mode}", accent.name()),
-                brightness,
-                accent,
-                roles: ColorRoles::base(brightness, accent),
+                name: name.into(),
+                roles,
+                density: Density::Pointer,
             }),
         }
     }
@@ -98,14 +148,50 @@ impl Theme {
         Self::new(Brightness::Dark, Accent::default())
     }
 
-    /// The brightness of the theme.
-    pub fn brightness(&self) -> Brightness {
-        self.inner.brightness
+    /// Returns the theme with another name.
+    pub fn with_name(self, name: impl Into<String>) -> Self {
+        let inner = &self.inner;
+
+        Self {
+            inner: Arc::new(Inner {
+                name: name.into(),
+                roles: inner.roles,
+                density: inner.density,
+            }),
+        }
     }
 
-    /// The accent of the theme.
-    pub fn accent(&self) -> Accent {
-        self.inner.accent
+    /// Returns the theme with another density: pointer or touch sizes for
+    /// controls and icons.
+    pub fn with_density(self, density: Density) -> Self {
+        let inner = &self.inner;
+
+        Self {
+            inner: Arc::new(Inner {
+                name: inner.name.clone(),
+                roles: inner.roles,
+                density,
+            }),
+        }
+    }
+
+    /// The brightness of the theme.
+    pub fn brightness(&self) -> Brightness {
+        self.inner.roles.brightness
+    }
+
+    /// The contrast level of the theme.
+    pub fn contrast(&self) -> Contrast {
+        if self.inner.roles.high_contrast {
+            Contrast::High
+        } else {
+            Contrast::Standard
+        }
+    }
+
+    /// The density of the theme.
+    pub fn density(&self) -> Density {
+        self.inner.density
     }
 
     /// The resolved color roles.
@@ -113,9 +199,25 @@ impl Theme {
         &self.inner.roles
     }
 
+    /// Minimum height of buttons and single-line fields.
+    pub fn control_height(&self) -> f32 {
+        match self.inner.density {
+            Density::Pointer => sizes::BUTTON_HEIGHT,
+            Density::Touch => sizes::TOUCH_BUTTON_HEIGHT,
+        }
+    }
+
+    /// Size of icons inside controls.
+    pub fn icon_size(&self) -> f32 {
+        match self.inner.density {
+            Density::Pointer => sizes::ICON_SIZE,
+            Density::Touch => 24.0,
+        }
+    }
+
     /// Color of the focus ring drawn around a focused control.
     pub fn focus_ring(&self) -> Color {
-        self.inner.roles.semantic.primary_text
+        self.inner.roles.indicator()
     }
 }
 
@@ -123,6 +225,21 @@ impl Default for Theme {
     fn default() -> Self {
         Self::light()
     }
+}
+
+/// The name of a base theme: "oito2 <accent> <light|dark>", with " high
+/// contrast" appended at the high contrast level.
+fn base_name(accent: &str, brightness: Brightness, contrast: Contrast) -> String {
+    let mode = match brightness {
+        Brightness::Light => "light",
+        Brightness::Dark => "dark",
+    };
+    let contrast = match contrast {
+        Contrast::Standard => "",
+        Contrast::High => " high contrast",
+    };
+
+    format!("oito2 {accent} {mode}{contrast}")
 }
 
 impl Base for Theme {
@@ -134,7 +251,7 @@ impl Base for Theme {
     }
 
     fn mode(&self) -> Mode {
-        match self.inner.brightness {
+        match self.inner.roles.brightness {
             Brightness::Light => Mode::Light,
             Brightness::Dark => Mode::Dark,
         }
@@ -147,10 +264,10 @@ impl Base for Theme {
         }
     }
 
-    fn palette(&self) -> Option<Palette> {
+    fn palette(&self) -> Option<iced_theme::Palette> {
         let roles = &self.inner.roles;
 
-        Some(Palette {
+        Some(iced_theme::Palette {
             background: roles.background,
             text: roles.on_surface,
             primary: roles.primary,

@@ -16,7 +16,7 @@
 //! Keyboard focus: Tab and Shift+Tab traversal, activation with Enter and
 //! Space, and focus loss on a click outside.
 
-mod support;
+use oito2_iced_test_utils as support;
 
 use iced::keyboard::{self, key::Named};
 use iced::widget::{button, column, text};

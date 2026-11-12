@@ -1,0 +1,30 @@
+{
+  "commit": "dd9ddd876f6070aa308e8cdd7c0f2be80eff0a26",
+  "fixtures": [
+    {
+      "file": "tokens.json",
+      "target": "crates/oito2_iced/tests/fixtures/parity"
+    },
+    {
+      "file": "schemes.json",
+      "target": "crates/oito2_iced/tests/fixtures/parity"
+    },
+    {
+      "file": "foundation.json",
+      "target": "crates/oito2_iced/tests/fixtures/parity"
+    },
+    {
+      "file": "l10n.json",
+      "target": "crates/oito2_iced/tests/fixtures/parity"
+    },
+    {
+      "file": "format.json",
+      "target": "crates/oito2_iced/tests/fixtures/parity"
+    },
+    {
+      "file": "manifest.json",
+      "target": "crates/oito2_iced/tests/fixtures/parity"
+    }
+  ],
+  "repository": "oito2/oito2_ui"
+}
