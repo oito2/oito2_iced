@@ -13,14 +13,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-//! Checks the embedded Inter instances: each weight, upright and italic, is
-//! rendered with Inter instead of a system fallback font, and the same text
-//! at a heavier weight covers more pixels.
+//! Checks the embedded Inter instances: each upright weight is rendered with
+//! Inter instead of a system fallback font, each italic weight with its own
+//! face, and the same text at a heavier weight covers more pixels.
 
 use oito2_iced_test_utils as support;
 
 use iced::Font;
-use iced::font::Style;
 use iced::font::Weight;
 use iced::widget::{column, text};
 use iced_test::simulator;
@@ -71,21 +70,30 @@ fn every_weight_renders_with_inter() {
     }
 }
 
+/// Every italic weight renders differently from its upright weight and from
+/// the other italic weights, and covers more pixels as the weight grows.
+///
+/// A font that does not exist cannot serve as the reference here: when the
+/// system has no italic face at a weight, the fallback picks the closest
+/// registered face, which is the embedded Inter italic itself.
 #[test]
-fn every_italic_weight_renders_with_inter() {
-    for weight in WEIGHTS {
-        let italic = render(font::inter_italic(weight));
-        let upright = render(font::inter(weight));
-        let fallback = render(Font {
-            weight,
-            style: Style::Italic,
-            ..Font::with_name("No Such Family")
-        });
+fn every_italic_weight_renders_with_its_own_inter_face() {
+    let italics: Vec<Vec<u8>> = WEIGHTS
+        .into_iter()
+        .map(|weight| render(font::inter_italic(weight)))
+        .collect();
 
-        assert!(italic != upright, "{weight:?} italic renders upright");
+    for (weight, italic) in WEIGHTS.into_iter().zip(&italics) {
         assert!(
-            italic != fallback,
-            "{weight:?} italic renders with a fallback font"
+            *italic != render(font::inter(weight)),
+            "{weight:?} italic renders upright"
+        );
+    }
+
+    for pair in italics.windows(2) {
+        assert!(
+            ink(&pair[1]) > ink(&pair[0]) * 1.03,
+            "italic weights do not get heavier"
         );
     }
 }
