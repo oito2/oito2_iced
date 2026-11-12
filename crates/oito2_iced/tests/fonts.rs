@@ -13,11 +13,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-//! Checks that the embedded Inter variable font renders distinct weights:
-//! the same text at a heavier weight must cover more pixels.
+//! Checks the embedded Inter instances: each weight is rendered with Inter
+//! instead of a system fallback font, and the same text at a heavier weight
+//! covers more pixels.
 
 mod support;
 
+use iced::Font;
 use iced::font::Weight;
 use iced::widget::{column, text};
 use iced_test::simulator;
@@ -30,25 +32,23 @@ const WEIGHTS: [Weight; 4] = [
     Weight::Bold,
 ];
 
-fn view(weight: Weight) -> Element<'static, ()> {
-    column![
-        text("Hamburgefonstiv 0123456789")
-            .font(font::inter(weight))
-            .size(32)
-    ]
-    .padding(10)
-    .into()
+fn view(font: Font) -> Element<'static, ()> {
+    column![text("Hamburgefonstiv 0123456789").font(font).size(32)]
+        .padding(10)
+        .into()
+}
+
+/// RGBA pixels of the sample text rendered with `font`.
+fn render(font: Font) -> Vec<u8> {
+    let mut ui = simulator::Simulator::with_size(support::settings(), (640.0, 80.0), view(font));
+    let snapshot = ui.snapshot(&Theme::light()).expect("snapshot");
+
+    support::pixels(&snapshot, "weight").rgba
 }
 
 /// Sum of the darkness of every pixel (dark text on a light background).
-fn ink(weight: Weight) -> f64 {
-    let mut ui = simulator::Simulator::with_size(support::settings(), (640.0, 80.0), view(weight));
-    let snapshot = ui.snapshot(&Theme::light()).expect("snapshot");
-    let image = support::pixels(&snapshot, "weight");
-
-    image
-        .rgba
-        .as_chunks::<4>()
+fn ink(rgba: &[u8]) -> f64 {
+    rgba.as_chunks::<4>()
         .0
         .iter()
         .map(|pixel| {
@@ -58,8 +58,24 @@ fn ink(weight: Weight) -> f64 {
 }
 
 #[test]
+fn every_weight_renders_with_inter() {
+    for weight in WEIGHTS {
+        let inter = render(font::inter(weight));
+        let fallback = render(Font {
+            weight,
+            ..Font::with_name("No Such Family")
+        });
+
+        assert!(inter != fallback, "{weight:?} renders with a fallback font");
+    }
+}
+
+#[test]
 fn heavier_weights_cover_more_pixels() {
-    let inks: Vec<f64> = WEIGHTS.into_iter().map(ink).collect();
+    let inks: Vec<f64> = WEIGHTS
+        .into_iter()
+        .map(|weight| ink(&render(font::inter(weight))))
+        .collect();
 
     println!("ink per weight (400, 500, 600, 700): {inks:?}");
 

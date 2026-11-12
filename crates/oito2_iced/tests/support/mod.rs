@@ -35,7 +35,7 @@ pub const CHANNEL_THRESHOLD: u8 = 2;
 /// Simulator settings with Inter as the default font.
 pub fn settings() -> Settings {
     Settings {
-        fonts: vec![font::INTER_VARIABLE.into()],
+        fonts: font::INTER_FONTS.into_iter().map(Into::into).collect(),
         default_font: font::INTER,
         ..Settings::default()
     }

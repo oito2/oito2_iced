@@ -15,19 +15,33 @@
 
 //! Embedded fonts.
 //!
-//! Inter is embedded as its variable font. Register [`INTER_VARIABLE`] with
-//! the application (`iced::application(..).font(INTER_VARIABLE)`) and use
+//! Inter is embedded as four static instances (Regular, Medium, SemiBold and
+//! Bold) of the family `Inter`. Register every entry of [`INTER_FONTS`] with
+//! the application (`iced::application(..).font(..)` once per entry) and use
 //! [`INTER`] as the default font; weights are selected with
-//! [`iced::font::Weight`].
+//! [`iced::font::Weight`]. Weights other than those four resolve to the
+//! nearest embedded instance.
 
 use iced::Font;
 use iced::font::Weight;
 
-/// The bytes of `InterVariable.ttf` (SIL Open Font License 1.1).
-pub const INTER_VARIABLE: &[u8] = include_bytes!("../assets/fonts/InterVariable.ttf");
+/// The bytes of `Inter-Regular.ttf` (weight 400, SIL Open Font License 1.1).
+pub const INTER_REGULAR: &[u8] = include_bytes!("../assets/fonts/Inter-Regular.ttf");
+
+/// The bytes of `Inter-Medium.ttf` (weight 500, SIL Open Font License 1.1).
+pub const INTER_MEDIUM: &[u8] = include_bytes!("../assets/fonts/Inter-Medium.ttf");
+
+/// The bytes of `Inter-SemiBold.ttf` (weight 600, SIL Open Font License 1.1).
+pub const INTER_SEMIBOLD: &[u8] = include_bytes!("../assets/fonts/Inter-SemiBold.ttf");
+
+/// The bytes of `Inter-Bold.ttf` (weight 700, SIL Open Font License 1.1).
+pub const INTER_BOLD: &[u8] = include_bytes!("../assets/fonts/Inter-Bold.ttf");
+
+/// Every embedded Inter instance, to register with the application.
+pub const INTER_FONTS: [&[u8]; 4] = [INTER_REGULAR, INTER_MEDIUM, INTER_SEMIBOLD, INTER_BOLD];
 
 /// Inter at regular weight.
-pub const INTER: Font = Font::with_name("Inter Variable");
+pub const INTER: Font = Font::with_name("Inter");
 
 /// Inter at the given weight.
 pub const fn inter(weight: Weight) -> Font {

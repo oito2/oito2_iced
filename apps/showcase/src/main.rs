@@ -40,7 +40,10 @@ fn main() -> iced::Result {
         .title("OITO2 Iced")
         .theme(Showcase::theme)
         .subscription(Showcase::subscription)
-        .font(font::INTER_VARIABLE)
+        .font(font::INTER_REGULAR)
+        .font(font::INTER_MEDIUM)
+        .font(font::INTER_SEMIBOLD)
+        .font(font::INTER_BOLD)
         .default_font(font::INTER)
         .window(window::Settings {
             size: iced::Size::new(960.0, 680.0),
@@ -215,7 +218,7 @@ impl Showcase {
             ]
             .into_iter()
             .map(|(label, weight)| {
-                text(format!("Inter Variable \u{2014} {label}"))
+                text(format!("Inter \u{2014} {label}"))
                     .font(font::inter(weight))
                     .size(18)
                     .into()
