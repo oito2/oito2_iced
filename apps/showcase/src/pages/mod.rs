@@ -23,11 +23,13 @@ mod groups;
 mod icons;
 mod layout;
 mod navigation;
+mod overlays;
 mod progress;
 mod toggles;
 
 use std::fmt;
 
+use oito2_iced::collections::ListCollection;
 use oito2_iced::widget::splitter;
 
 use iced::font::Weight;
@@ -60,6 +62,8 @@ pub enum Page {
     Layout,
     /// Tab bars, navigation rails and pages, and master-detail pages.
     Navigation,
+    /// Menus, popovers, hover cards, autocomplete, sheets, dialogs and toasts.
+    Overlays,
     /// Progress indicators.
     Progress,
     /// Icons.
@@ -68,7 +72,7 @@ pub enum Page {
 
 impl Page {
     /// Every page, in the order of the sidebar.
-    pub const ALL: [Page; 10] = [
+    pub const ALL: [Page; 11] = [
         Page::Overview,
         Page::Buttons,
         Page::Toggles,
@@ -77,6 +81,7 @@ impl Page {
         Page::Containers,
         Page::Layout,
         Page::Navigation,
+        Page::Overlays,
         Page::Progress,
         Page::Icons,
     ];
@@ -93,6 +98,7 @@ impl fmt::Display for Page {
             Page::Containers => "Containers",
             Page::Layout => "Layout",
             Page::Navigation => "Navigation",
+            Page::Overlays => "Overlays",
             Page::Progress => "Progress",
             Page::Icons => "Icons",
         })
@@ -146,6 +152,17 @@ pub struct Gallery {
     destination: usize,
     device: Option<usize>,
     device_pane: f32,
+    sort: &'static str,
+    sort_open: bool,
+    hidden_files: bool,
+    fruits: Option<ListCollection<String>>,
+    fruit: Option<String>,
+    fruit_open: bool,
+    split_open: bool,
+    context_open: bool,
+    popover_open: bool,
+    cities: Option<ListCollection<String>>,
+    city: String,
 }
 
 impl Default for Gallery {
@@ -184,6 +201,25 @@ impl Default for Gallery {
             destination: 0,
             device: Some(1),
             device_pane: 240.0,
+            sort: overlays::SORTS[0],
+            sort_open: false,
+            hidden_files: false,
+            fruits: collection(&["Apple", "Banana", "Cherry", "Grape", "Mango"]),
+            fruit: None,
+            fruit_open: false,
+            split_open: false,
+            context_open: false,
+            popover_open: false,
+            cities: collection(&[
+                "Belo Horizonte",
+                "Brasília",
+                "Curitiba",
+                "Juiz de Fora",
+                "Salvador",
+                "Santos",
+                "São Paulo",
+            ]),
+            city: String::new(),
         }
     }
 }
@@ -257,6 +293,38 @@ pub enum Message {
     Device(Option<usize>),
     /// The master pane of the master-detail page was resized.
     DevicePane(f32),
+    /// A sort order was chosen.
+    Sort(&'static str),
+    /// The sort menu opened or closed.
+    SortOpen(bool),
+    /// The hidden files item changed.
+    HiddenFiles(bool),
+    /// A fruit was chosen.
+    Fruit(String),
+    /// The fruit select opened or closed.
+    FruitOpen(bool),
+    /// The split button menu opened or closed.
+    SplitOpen(bool),
+    /// The context menu opened or closed.
+    ContextOpen(bool),
+    /// The popover opened or closed.
+    PopoverOpen(bool),
+    /// The city field changed or a city was picked.
+    City(String),
+    /// A sheet should open: at the bottom when true, at the end otherwise.
+    OpenSheet(bool),
+    /// The dialog should open.
+    OpenDialog,
+    /// A toast should show.
+    ShowToast,
+    /// The command palette should open.
+    OpenPalette,
+}
+
+/// A collection of the `labels`, valued by themselves; `None` when two
+/// labels repeat.
+fn collection(labels: &[&str]) -> Option<ListCollection<String>> {
+    ListCollection::new(labels.iter().map(|label| (*label).to_owned())).ok()
 }
 
 impl Gallery {
@@ -313,6 +381,19 @@ impl Gallery {
             Message::Destination(index) => self.destination = index,
             Message::Device(device) => self.device = device,
             Message::DevicePane(size) => self.device_pane = size,
+            Message::Sort(sort) => self.sort = sort,
+            Message::SortOpen(open) => self.sort_open = open,
+            Message::HiddenFiles(shown) => self.hidden_files = shown,
+            Message::Fruit(fruit) => self.fruit = Some(fruit),
+            Message::FruitOpen(open) => self.fruit_open = open,
+            Message::SplitOpen(open) => self.split_open = open,
+            Message::ContextOpen(open) => self.context_open = open,
+            Message::PopoverOpen(open) => self.popover_open = open,
+            Message::City(city) => self.city = city,
+            Message::OpenSheet(_)
+            | Message::OpenDialog
+            | Message::ShowToast
+            | Message::OpenPalette => {}
         }
     }
 
@@ -332,6 +413,7 @@ impl Gallery {
             Page::Containers => Some(containers::view(self)),
             Page::Layout => Some(layout::view(self)),
             Page::Navigation => Some(navigation::view(self, localizations)),
+            Page::Overlays => Some(overlays::view(self)),
             Page::Progress => Some(progress::view(self)),
             Page::Icons => Some(icons::view()),
         }

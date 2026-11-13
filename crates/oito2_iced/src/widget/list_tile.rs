@@ -246,7 +246,7 @@ impl<'a, Message> ListTile<'a, Message> {
 }
 
 /// The minimum height of a list tile, padding included.
-fn min_height(density: Density, has_subtitle: bool) -> f32 {
+pub(crate) fn min_height(density: Density, has_subtitle: bool) -> f32 {
     match (density, has_subtitle) {
         (Density::Pointer, false) => 40.0,
         (Density::Pointer, true) => 52.0,

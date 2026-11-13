@@ -15,19 +15,25 @@
 
 //! OITO2 widgets.
 
+pub mod autocomplete;
 pub mod button;
 pub mod chips;
+pub mod command_palette;
 pub mod containers;
+pub mod context_menu;
 pub mod controls;
 pub mod copy;
+pub mod dialog;
 pub mod editable_label;
 pub mod expandable;
 mod focusable;
 pub mod helpers;
 pub mod highlighted_text;
+pub mod hover_card;
 pub mod info;
 pub mod list_tile;
 pub mod master_detail;
+pub mod menu;
 mod min_size;
 pub mod navigation_page;
 pub mod navigation_rail;
@@ -41,10 +47,13 @@ pub mod scroll_area;
 pub mod search;
 pub mod segment_group;
 pub mod selectable;
+pub mod sheet;
 pub mod slider;
+pub mod split_button;
 pub mod splitter;
 pub mod tab_bar;
 pub mod text_field;
+pub mod toast;
 pub mod toggle_group;
 pub mod toggles;
 mod tooltip;

@@ -314,6 +314,7 @@ where
         max_width: f32::INFINITY,
         max_height: f32::INFINITY,
         match_anchor_width: false,
+        fit_anchor_width: false,
         class: Panel::Popover,
     }
 }
@@ -345,6 +346,7 @@ pub struct Anchored<'a, Message, Renderer = iced::Renderer> {
     max_width: f32,
     max_height: f32,
     match_anchor_width: bool,
+    fit_anchor_width: bool,
     class: Panel,
 }
 
@@ -433,6 +435,20 @@ impl<Message, Renderer> Anchored<'_, Message, Renderer> {
     pub fn match_anchor_width(mut self, matches: bool) -> Self {
         self.match_anchor_width = matches;
         self
+    }
+
+    /// Gives a panel above or below the anchor exactly the width of the
+    /// anchor: at least as wide, as with [`Anchored::match_anchor_width`],
+    /// and no wider, so content that fills the width takes the anchor's.
+    #[must_use]
+    pub fn fit_anchor_width(mut self, fits: bool) -> Self {
+        self.fit_anchor_width = fits;
+        self
+    }
+
+    /// Shows or hides the panel of an anchored panel already built.
+    pub(crate) fn set_open(&mut self, open: bool) {
+        self.open = open;
     }
 
     /// Draws the panel as a menu: the menu surface with the medium radius.
@@ -600,6 +616,7 @@ where
             padding: self.padding,
             max: Size::new(self.max_width, self.max_height),
             match_anchor_width: self.match_anchor_width,
+            fit_anchor_width: self.fit_anchor_width,
             class: self.class,
             on_dismiss: self.on_dismiss.clone(),
         })))
@@ -626,6 +643,7 @@ struct Overlay<'a, 'b, Message, Renderer> {
     padding: Padding,
     max: Size,
     match_anchor_width: bool,
+    fit_anchor_width: bool,
     class: Panel,
     on_dismiss: Option<Message>,
 }
@@ -640,7 +658,13 @@ where
             max.width.min(self.max.width),
             max.height.min(self.max.height),
         );
-        let min_width = if self.match_anchor_width && side.is_vertical() {
+        let fits = self.fit_anchor_width && side.is_vertical();
+        let max = if fits {
+            Size::new(max.width.min(self.anchor.width), max.height)
+        } else {
+            max
+        };
+        let min_width = if (self.match_anchor_width || fits) && side.is_vertical() {
             self.anchor.width.min(max.width)
         } else {
             0.0

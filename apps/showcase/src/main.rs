@@ -26,16 +26,18 @@ mod pages;
 use std::time::Instant;
 
 use iced::font::Weight;
-use iced::widget::{button, column, container, opaque, pick_list, row, scrollable, stack, text};
-use iced::{Element, Length, Subscription, Task, window};
+use iced::widget::{button, column, container, pick_list, row, scrollable, text};
+use iced::{Element, Length, Subscription, Task, keyboard, window};
 
 use appearance::{Appearance, ContrastChoice, DensityChoice, Desktop, Family, Language, Mode};
 use oito2_iced::animation::{self, Animation};
+use oito2_iced::shortcuts::{Command, CommandRegistry, KeyChord, OperatingSystem, Shortcut};
 use oito2_iced::theme::button::Class as ButtonClass;
 use oito2_iced::theme::container::Class as ContainerClass;
 use oito2_iced::theme::text::Class as TextClass;
 use oito2_iced::tokens::{Accent, spacing};
-use oito2_iced::widget::{focusable, popover};
+use oito2_iced::widget::info::InfoType;
+use oito2_iced::widget::{command_palette, dialog, focusable, popover, sheet, toast};
 use oito2_iced::window::{Labels, Placement, WindowState};
 use oito2_iced::{Theme, focus, font};
 use oito2_iced_settings::SystemSettings;
@@ -87,6 +89,14 @@ struct Showcase {
     popover_open: bool,
     expanded: Animation<bool>,
     now: Instant,
+    dialog_open: bool,
+    sheet: Option<bool>,
+    sheet_snap: usize,
+    toasts: toast::Toasts<Message>,
+    toasts_shown: usize,
+    palette_open: bool,
+    palette_query: String,
+    commands: CommandRegistry<Message>,
 }
 
 #[derive(Debug, Clone)]
@@ -110,6 +120,59 @@ enum Message {
     DismissPopover,
     Animate,
     Frame(Instant),
+    Key(keyboard::Event),
+    CloseDialog,
+    CloseSheet,
+    Snap(usize),
+    Toast(toast::Event),
+    Undo,
+    OpenPalette,
+    PaletteQuery(String),
+    ClosePalette,
+}
+
+/// The commands of the showcase: the command palette, the settings and a
+/// command per page.
+fn commands() -> CommandRegistry<Message> {
+    let mut registry = CommandRegistry::new();
+    let shortcut = |text: &str| Shortcut::parse(text).ok();
+    let mut add = |command: Command<Message>, keys: Option<Shortcut>| {
+        let command = match keys {
+            Some(keys) => command.with_shortcut(keys),
+            None => command,
+        };
+        registry.register(command);
+    };
+
+    add(
+        Command::new("palette", "Command palette", Message::OpenPalette)
+            .with_group("Window")
+            .with_description("Search the commands"),
+        shortcut("Mod+K"),
+    );
+    add(
+        Command::new("settings", "Settings", Message::OpenSettings)
+            .with_group("Window")
+            .with_description("Theme, contrast, density, language and desktop"),
+        shortcut("Mod+,"),
+    );
+    add(
+        Command::new("accent", "Next accent", Message::NextAccent).with_group("Theme"),
+        None,
+    );
+    for page in Page::ALL {
+        add(
+            Command::new(
+                format!("page-{page}"),
+                format!("Go to {page}"),
+                Message::Navigate(page),
+            )
+            .with_group("Pages"),
+            None,
+        );
+    }
+
+    registry
 }
 
 impl Showcase {
@@ -124,6 +187,14 @@ impl Showcase {
             popover_open: false,
             expanded: animation::emphasized_animation(false, animation::duration::EXTRA_LONG),
             now: Instant::now(),
+            dialog_open: false,
+            sheet: None,
+            sheet_snap: 0,
+            toasts: toast::Toasts::new(),
+            toasts_shown: 0,
+            palette_open: false,
+            palette_query: String::new(),
+            commands: commands(),
         }
     }
 
@@ -163,7 +234,41 @@ impl Showcase {
             Message::Language(language) => self.appearance.language = language,
             Message::Desktop(desktop) => self.appearance.desktop = desktop,
             Message::Navigate(page) => self.page = page,
+            Message::Gallery(pages::Message::OpenSheet(bottom)) => {
+                self.sheet = Some(bottom);
+                self.sheet_snap = 0;
+            }
+            Message::Gallery(pages::Message::OpenDialog) => self.dialog_open = true,
+            Message::Gallery(pages::Message::ShowToast) => self.show_toast(),
+            Message::Gallery(pages::Message::OpenPalette) | Message::OpenPalette => {
+                self.palette_open = true;
+                self.palette_query.clear();
+            }
             Message::Gallery(message) => self.gallery.update(message),
+            Message::Key(event) => {
+                if let Some(chord) = KeyChord::from_keyboard_event(&event)
+                    && let Some(command) = self
+                        .commands
+                        .find_by_chord(&chord, OperatingSystem::current())
+                {
+                    let action = command.action.clone();
+                    return self.update(action);
+                }
+            }
+            Message::CloseDialog => self.dialog_open = false,
+            Message::CloseSheet => self.sheet = None,
+            Message::Snap(snap) => self.sheet_snap = snap,
+            Message::Toast(event) => {
+                if let Some(action) = self.toasts.update(event) {
+                    return self.update(action);
+                }
+            }
+            Message::Undo => {
+                self.toasts
+                    .push(toast::Toast::new("Restored").with_kind(InfoType::Success));
+            }
+            Message::PaletteQuery(query) => self.palette_query = query,
+            Message::ClosePalette => self.palette_open = false,
             Message::TogglePopover => self.popover_open = !self.popover_open,
             Message::DismissPopover => self.popover_open = false,
             Message::Animate => {
@@ -177,6 +282,23 @@ impl Showcase {
         Task::none()
     }
 
+    /// Shows the next of the example toasts.
+    fn show_toast(&mut self) {
+        let toast = match self.toasts_shown % 3 {
+            0 => toast::Toast::new("File deleted")
+                .with_description("report.pdf was moved to the trash.")
+                .with_kind(InfoType::Information)
+                .with_action("Undo", Message::Undo),
+            1 => toast::Toast::new("Changes saved").with_kind(InfoType::Success),
+            _ => toast::Toast::new("Connection lost")
+                .with_description("Trying again in 30 seconds.")
+                .with_kind(InfoType::Danger),
+        };
+
+        self.toasts_shown += 1;
+        self.toasts.push(toast);
+    }
+
     fn subscription(&self) -> Subscription<Message> {
         let frames = if self.expanded.is_animating(self.now) {
             window::frames().map(Message::Frame)
@@ -187,6 +309,7 @@ impl Showcase {
         Subscription::batch([
             oito2_iced_settings::subscription().map(Message::System),
             window::events().map(|(id, event)| Message::WindowEvent(id, event)),
+            keyboard::listen().map(Message::Key),
             frames,
         ])
     }
@@ -317,17 +440,74 @@ impl Showcase {
 
         let window = column![header, body];
 
-        let content: Element<'_, Message, Theme> = if self.settings_open {
-            stack![window, self.settings_dialog()].into()
+        let sheet = self
+            .sheet
+            .map(|bottom| self.example_sheet(bottom, &localizations));
+        let dialog = if self.settings_open {
+            Some(self.settings_dialog())
         } else {
-            window.into()
+            self.dialog_open.then(|| {
+                dialog::dialog(
+                    text("Discard the changes made to this document?").width(Length::Fixed(320.0)),
+                )
+                .title("Discard changes?")
+                .action(oito2_iced::widget::button::text("Cancel").on_press(Message::CloseDialog))
+                .action(
+                    oito2_iced::widget::button::danger("Discard").on_press(Message::CloseDialog),
+                )
+                .on_dismiss(Message::CloseDialog)
+            })
         };
+        let commands = self.commands.enabled();
+
+        let content = toast::toaster(
+            command_palette::command_palette(
+                dialog::host(sheet::host(window, sheet), dialog),
+                &localizations,
+                &commands,
+                &self.palette_query,
+                Message::PaletteQuery,
+                Message::ClosePalette,
+            )
+            .open(self.palette_open),
+            &self.toasts,
+            &localizations,
+            Message::Toast,
+        );
 
         oito2_iced::window::resize_handles(focus::navigation(content), Message::Window)
     }
 
-    /// The settings dialog over a scrim.
-    fn settings_dialog(&self) -> Element<'_, Message, Theme> {
+    /// The example sheet: at the bottom with two snap points when `bottom`,
+    /// at the end otherwise.
+    fn example_sheet(
+        &self,
+        bottom: bool,
+        localizations: &oito2_iced::l10n::Localizations,
+    ) -> sheet::Sheet<'_, Message> {
+        let body = column![
+            text("Drag the edge toward the window edge, press Escape or click outside to close.")
+                .class(TextClass::Variant),
+            oito2_iced::widget::button::filled("Done").on_press(Message::CloseSheet),
+        ]
+        .spacing(spacing::MD);
+        let content = sheet::content(body)
+            .title(if bottom { "Bottom sheet" } else { "Details" })
+            .on_close(Message::CloseSheet)
+            .localizations(localizations);
+        let sheet = sheet::sheet(content).on_dismiss(Message::CloseSheet);
+
+        if bottom {
+            sheet
+                .side(sheet::Side::Bottom)
+                .snap_points([0.35, 0.8], self.sheet_snap, Message::Snap)
+        } else {
+            sheet
+        }
+    }
+
+    /// The settings dialog.
+    fn settings_dialog(&self) -> dialog::Dialog<'_, Message> {
         let appearance = &self.appearance;
 
         let field = |label: &'static str, control: Element<'static, Message, Theme>| {
@@ -341,63 +521,49 @@ impl Showcase {
             .align_y(iced::Alignment::Center)
         };
 
-        let dialog = container(
-            column![
-                text("Settings")
-                    .font(font::inter(Weight::Semibold))
-                    .size(oito2_iced::tokens::typography::TITLE_LARGE.size),
-                field(
-                    "Theme",
-                    pick_list(Mode::ALL, Some(appearance.mode), Message::Mode).into()
-                ),
-                field(
-                    "Color theme",
-                    pick_list(Family::all(), Some(appearance.family), Message::Family).into()
-                ),
-                field(
-                    "Contrast",
-                    pick_list(
-                        ContrastChoice::ALL,
-                        Some(appearance.contrast),
-                        Message::Contrast
-                    )
-                    .into()
-                ),
-                field(
-                    "Density",
-                    pick_list(
-                        DensityChoice::ALL,
-                        Some(appearance.density),
-                        Message::Density
-                    )
-                    .into()
-                ),
-                field(
-                    "Language",
-                    pick_list(Language::ALL, Some(appearance.language), Message::Language).into()
-                ),
-                field(
-                    "Desktop",
-                    pick_list(Desktop::all(), Some(appearance.desktop), Message::Desktop).into()
-                ),
-                row![
-                    iced::widget::space::horizontal(),
-                    oito2_iced::widget::button::filled("Close").on_press(Message::CloseSettings),
-                ],
-            ]
-            .spacing(spacing::MD)
-            .width(440),
-        )
-        .class(ContainerClass::Dialog)
-        .padding(spacing::XL);
+        let fields = column![
+            field(
+                "Theme",
+                pick_list(Mode::ALL, Some(appearance.mode), Message::Mode).into()
+            ),
+            field(
+                "Color theme",
+                pick_list(Family::all(), Some(appearance.family), Message::Family).into()
+            ),
+            field(
+                "Contrast",
+                pick_list(
+                    ContrastChoice::ALL,
+                    Some(appearance.contrast),
+                    Message::Contrast
+                )
+                .into()
+            ),
+            field(
+                "Density",
+                pick_list(
+                    DensityChoice::ALL,
+                    Some(appearance.density),
+                    Message::Density
+                )
+                .into()
+            ),
+            field(
+                "Language",
+                pick_list(Language::ALL, Some(appearance.language), Message::Language).into()
+            ),
+            field(
+                "Desktop",
+                pick_list(Desktop::all(), Some(appearance.desktop), Message::Desktop).into()
+            ),
+        ]
+        .spacing(spacing::MD)
+        .width(440);
 
-        opaque(
-            container(dialog)
-                .center(Length::Fill)
-                .class(ContainerClass::Custom(Box::new(|theme: &Theme| {
-                    container::Style::default().background(theme.roles().scrim.scale_alpha(0.32))
-                }))),
-        )
+        dialog::dialog(fields)
+            .title("Settings")
+            .action(oito2_iced::widget::button::filled("Close").on_press(Message::CloseSettings))
+            .on_dismiss(Message::CloseSettings)
     }
 }
 
@@ -498,6 +664,77 @@ mod tests {
             )
             .roles()
         );
+    }
+
+    /// A press of `key` with the primary modifier of the platform.
+    fn primary_press(key: &str) -> keyboard::Event {
+        let modifiers = if oito2_iced::shortcuts::uses_command_key(OperatingSystem::current()) {
+            keyboard::Modifiers::LOGO
+        } else {
+            keyboard::Modifiers::CTRL
+        };
+
+        keyboard::Event::KeyPressed {
+            key: keyboard::Key::Character(key.into()),
+            modified_key: keyboard::Key::Character(key.into()),
+            physical_key: keyboard::key::Physical::Unidentified(
+                keyboard::key::NativeCode::Unidentified,
+            ),
+            location: keyboard::Location::Standard,
+            modifiers,
+            text: None,
+            repeat: false,
+        }
+    }
+
+    #[test]
+    fn the_primary_k_shortcut_opens_the_palette_and_enter_runs_a_command() {
+        let mut app = showcase();
+        run(&mut app, [Message::Key(primary_press("k"))]);
+        assert!(app.palette_open);
+
+        run(&mut app, [Message::PaletteQuery("overlays".to_owned())]);
+        let messages: Vec<Message> = {
+            let mut ui = Simulator::with_settings(oito2_iced_test_utils::settings(), app.view());
+            ui.tap_key(keyboard::key::Named::Enter);
+            ui.into_messages().collect()
+        };
+        run(&mut app, messages);
+
+        assert!(!app.palette_open);
+        assert_eq!(app.page, Page::Overlays);
+    }
+
+    #[test]
+    fn the_overlays_page_opens_the_window_surfaces() {
+        let mut app = on_page(Page::Overlays);
+
+        for (label, check) in [
+            (
+                "Dialog",
+                (|app: &Showcase| app.dialog_open) as fn(&Showcase) -> bool,
+            ),
+            ("End sheet", |app| app.sheet == Some(false)),
+            ("Toast", |app| app.toasts.active_count() == 1),
+        ] {
+            let messages: Vec<Message> = {
+                let mut ui =
+                    Simulator::with_size(oito2_iced_test_utils::settings(), TALL, app.view());
+                ui.click(label).expect("button");
+                ui.into_messages().collect()
+            };
+            run(&mut app, messages);
+
+            assert!(check(&app), "{label}");
+
+            let mut ui = Simulator::with_size(oito2_iced_test_utils::settings(), TALL, app.view());
+            ui.tap_key(keyboard::key::Named::Escape);
+            let messages: Vec<Message> = ui.into_messages().collect();
+            run(&mut app, messages);
+        }
+
+        assert!(!app.dialog_open);
+        assert_eq!(app.sheet, None);
     }
 
     /// A window tall enough to show every card of a page without scrolling.
