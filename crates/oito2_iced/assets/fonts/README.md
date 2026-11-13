@@ -18,8 +18,10 @@ python3 tools/fonts/make_instances.py InterVariable.ttf InterVariable-Italic.ttf
 | 700 | `Inter-Bold.ttf` | `Inter-BoldItalic.ttf` |
 
 Each instance pins `wght` to its weight and `opsz` to 14, belongs to the family
-`Inter` with the subfamily of its weight and style, and has the OS/2 weight
-class of its weight.
+`OITO2 Inter` (PostScript names `OITO2Inter-<Subfamily>`) with the subfamily of
+its weight and style, and has the OS/2 weight class of its weight. The family
+has its own name so that an Inter installed on the system, often another
+version, never replaces the embedded faces.
 
 Static instances are embedded because the text stack matches a font face by
 its exact weight: a single variable face is only chosen at its default weight

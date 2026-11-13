@@ -32,7 +32,7 @@ Rules defined for this project. They take precedence over `AGENTS.md` and over t
 
 - Run before reporting: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`, `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked`, `cargo deny check`, `ICED_TEST_BACKEND=tiny-skia cargo test --workspace --all-features --locked`, `cargo +1.97 check --workspace --all-features --locked`. Code that differs per platform is also checked with `cargo clippy --target x86_64-pc-windows-msvc` and `--target aarch64-apple-darwin`.
 - Behaviour tests use the `iced_test` simulator; the focus traversal lives in `focus::navigation` (a widget, not a subscription) so the simulator exercises it.
-- Fonts are static instances made by `tools/fonts/make_instances.py` from the `oito2_ui` variable fonts; a variable font is never embedded, because the text stack only matches faces by exact weight.
+- Fonts are static instances made by `tools/fonts/make_instances.py` from the `oito2_ui` variable fonts, in the family `OITO2 Inter` (own name, so an Inter installed on the system never replaces them); a variable font is never embedded, because the text stack only matches faces by exact weight.
 - Test helpers live in the `oito2_iced_test_utils` crate (`publish = false`): simulator settings with the embedded fonts, snapshot pixels and the `golden!` macro. Goldens live in `crates/*/tests/goldens/<name>-<renderer>.png`, compared with 0.5 % tolerance; `OITO2_UPDATE_GOLDENS=1` rewrites them, and a missing golden fails. Look at every new or changed golden before accepting it.
 - Never automate clicks or input on the user's real desktop; manual desktop checks (LiveCDs, window managers) are the user's.
 

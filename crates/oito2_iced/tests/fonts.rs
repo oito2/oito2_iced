@@ -114,3 +114,22 @@ fn heavier_weights_cover_more_pixels() {
         );
     }
 }
+
+/// Whether `bytes` holds `name` encoded in UTF-16 big endian, the encoding
+/// of the Windows records of a font name table.
+fn has_utf16_name(bytes: &[u8], name: &str) -> bool {
+    let encoded: Vec<u8> = name.encode_utf16().flat_map(u16::to_be_bytes).collect();
+
+    bytes
+        .windows(encoded.len())
+        .any(|window| window == encoded.as_slice())
+}
+
+#[test]
+fn every_embedded_instance_belongs_to_the_own_family() {
+    assert_eq!(font::INTER, Font::with_name(font::INTER_FAMILY));
+
+    for bytes in font::INTER_FONTS {
+        assert!(has_utf16_name(bytes, font::INTER_FAMILY));
+    }
+}

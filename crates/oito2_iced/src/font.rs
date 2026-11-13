@@ -16,7 +16,9 @@
 //! Embedded fonts.
 //!
 //! Inter is embedded as eight static instances: Regular, Medium, SemiBold
-//! and Bold, upright and italic, all in the family `Inter`. Register every
+//! and Bold, upright and italic, all in the family `OITO2 Inter`, so an
+//! Inter installed on the system never takes the place of the embedded
+//! faces. Register every
 //! entry of [`INTER_FONTS`] with the application
 //! (`iced::application(..).font(..)` once per entry) and use [`INTER`] as
 //! the default font; weights are selected with [`iced::font::Weight`] and
@@ -71,8 +73,11 @@ pub const INTER_FONTS: [&[u8]; 8] = [
     INTER_BOLD_ITALIC,
 ];
 
+/// The family name of the embedded Inter instances.
+pub const INTER_FAMILY: &str = "OITO2 Inter";
+
 /// Inter at regular weight.
-pub const INTER: Font = Font::with_name("Inter");
+pub const INTER: Font = Font::with_name(INTER_FAMILY);
 
 /// Inter at the given weight.
 pub const fn inter(weight: Weight) -> Font {
