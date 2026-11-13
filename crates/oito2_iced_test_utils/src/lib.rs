@@ -219,3 +219,49 @@ pub fn pixel_at(image: &Image, point: iced::Point, logical_width: f32) -> iced::
 
     iced::Color::from_rgba8(r, g, b, f32::from(a) / 255.0)
 }
+
+/// The mouse cursor `element` asks for while the pointer rests at `point`,
+/// laid out in a window of `size`, with the renderer the simulator uses.
+///
+/// The fonts of [`settings`] are loaded by the first simulator of the test
+/// process; build one before calling this so text is measured with them.
+pub fn mouse_interaction<'a, Message>(
+    element: impl Into<iced::Element<'a, Message, oito2_iced::Theme>>,
+    size: impl Into<iced::Size>,
+    point: iced::Point,
+) -> iced::mouse::Interaction {
+    use iced::advanced::renderer::Headless;
+    use iced_test::runtime::user_interface::{self, State, UserInterface};
+
+    let backend = std::env::var("ICED_TEST_BACKEND").ok();
+    let mut renderer = iced_test::futures::futures::executor::block_on(
+        <iced::Renderer as Headless>::new(font::INTER, iced::Pixels(16.0), backend.as_deref()),
+    )
+    .expect("headless renderer");
+
+    let mut ui = UserInterface::build(
+        element,
+        size.into(),
+        user_interface::Cache::default(),
+        &mut renderer,
+    );
+
+    let cursor = iced::mouse::Cursor::Available(point);
+    let mut messages = Vec::new();
+    let (state, _) = ui.update(
+        &[iced::Event::Mouse(iced::mouse::Event::CursorMoved {
+            position: point,
+        })],
+        cursor,
+        &mut renderer,
+        &mut iced::advanced::clipboard::Null,
+        &mut messages,
+    );
+
+    match state {
+        State::Updated {
+            mouse_interaction, ..
+        } => mouse_interaction,
+        State::Outdated => iced::mouse::Interaction::None,
+    }
+}

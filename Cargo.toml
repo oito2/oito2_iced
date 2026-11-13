@@ -6,6 +6,7 @@ members = [
     "crates/oito2_iced_test_utils",
     "crates/oito2_iced_themes",
     "apps/showcase",
+    "tools/icons",
     "tools/parity",
 ]
 

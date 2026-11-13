@@ -15,9 +15,27 @@
 
 //! OITO2 widgets.
 
+pub mod button;
+pub mod chips;
+pub mod containers;
+pub mod controls;
 mod focusable;
 pub mod helpers;
+pub mod info;
+pub mod list_tile;
+mod min_size;
 pub mod popover;
+pub mod progress;
+pub mod segment_group;
+pub mod selectable;
+pub mod slider;
+pub mod toggle_group;
+pub mod toggles;
+mod tooltip;
+mod typography;
 
 pub use focusable::{Focusable, focusable};
+pub use min_size::{MinSize, Minimum, min_size};
 pub use popover::{Popover, popover};
+pub use tooltip::{TOOLTIP_DELAY, tooltip};
+pub use typography::styled_text;

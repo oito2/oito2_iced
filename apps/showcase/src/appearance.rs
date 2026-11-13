@@ -237,11 +237,7 @@ impl Appearance {
             ContrastChoice::High => settings.high_contrast = true,
         }
 
-        let density = match self.density {
-            DensityChoice::System => settings.platform.density(),
-            DensityChoice::Pointer => Density::Pointer,
-            DensityChoice::Touch => Density::Touch,
-        };
+        let density = self.density(&settings);
 
         let theme = match self.family.0 {
             Some(preset) => preset.theme(oito2_iced_settings::contrast(&settings)),
@@ -253,6 +249,15 @@ impl Appearance {
         };
 
         theme.with_density(density)
+    }
+
+    /// The density of these choices under the system `settings`.
+    pub fn density(&self, settings: &SystemSettings) -> Density {
+        match self.density {
+            DensityChoice::System => settings.platform.density(),
+            DensityChoice::Pointer => Density::Pointer,
+            DensityChoice::Touch => Density::Touch,
+        }
     }
 
     /// The window control style and button layout of these choices under

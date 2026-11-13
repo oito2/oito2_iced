@@ -41,6 +41,7 @@ where
         id: None,
         on_activate: None,
         radius: radius::MEDIUM,
+        enabled: true,
     }
 }
 
@@ -50,6 +51,7 @@ pub struct Focusable<'a, Message, Renderer = iced::Renderer> {
     id: Option<Id>,
     on_activate: Option<Message>,
     radius: f32,
+    enabled: bool,
 }
 
 impl<Message, Renderer> Focusable<'_, Message, Renderer> {
@@ -73,6 +75,14 @@ impl<Message, Renderer> Focusable<'_, Message, Renderer> {
     #[must_use]
     pub fn radius(mut self, radius: f32) -> Self {
         self.radius = radius;
+        self
+    }
+
+    /// Sets whether the element takes part in focus traversal (true by
+    /// default). A disabled element is skipped by Tab and loses the focus.
+    #[must_use]
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
         self
     }
 }
@@ -148,7 +158,13 @@ where
         operation: &mut dyn Operation,
     ) {
         let state = tree.state.downcast_mut::<State>();
-        operation.focusable(self.id.as_ref(), layout.bounds(), state);
+
+        if self.enabled {
+            operation.focusable(self.id.as_ref(), layout.bounds(), state);
+        } else {
+            state.is_focused = false;
+            operation.container(self.id.as_ref(), layout.bounds());
+        }
 
         let Some(content_layout) = layout.children().next() else {
             return;
@@ -237,7 +253,7 @@ where
             );
         }
 
-        if tree.state.downcast_ref::<State>().is_focused {
+        if self.enabled && tree.state.downcast_ref::<State>().is_focused {
             crate::focus::draw_ring(renderer, theme, layout.bounds(), self.radius);
         }
     }

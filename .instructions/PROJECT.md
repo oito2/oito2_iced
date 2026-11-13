@@ -12,13 +12,14 @@ Rules defined for this project. They take precedence over `AGENTS.md` and over t
 ## Developer Notes
 
 - Personal notes, plans and test procedures live in `/srv/workspace/MyProjects/DevNotes/oito2_iced/` (outside the repository) and may be written in pt-BR (exception to the English-only documentation rule of `AGENTS.md`, which applies to files inside the repository).
-- `.references/` (Iced 0.14.0, iced_aw v0.14.1, libcosmic, mundy, material-colors clones and links to the sibling repositories), `.sync82.json` and the whole `.claude/` folder stay out of git.
+- `.references/` (Iced 0.14.0, iced_aw v0.14.1, libcosmic, mundy, material-colors and Lucide 1.70.0 clones and links to the sibling repositories), `.sync82.json` and the whole `.claude/` folder stay out of git.
 - `.references/iced` is the primary source for the Iced API: the API changed between 0.12, 0.13 and 0.14, so verify every Iced call against it. Code from the references (MIT, MPL, Apache) is never copied into this GPL project.
 
 ## Design Source of Truth
 
 - `oito2_ui` (Dart) defines tokens, colors, strings and behaviour; this project never invents a color, radius or height. A design change lands there first and reaches `tools/parity/fixtures`.
 - The parity fixtures reach `crates/*/tests/fixtures/parity/` only through `cargo run -p oito2_iced_parity -- sync <path to oito2_ui>`, which records the source commit in `tools/parity/source.json` and in each fixture README; `parity.yml` runs `check` against `oito2_ui@main` every week.
+- Lucide icons reach `crates/oito2_iced/src/icon/lucide.rs` only through `cargo run -p oito2_iced_icons -- generate <Lucide checkout at a release tag>` (the tag `oito2_ui` uses through `flutter_lucide`; recorded in `tools/icons/source.json`); the module is generated and never edited by hand.
 
 ## Source Files
 

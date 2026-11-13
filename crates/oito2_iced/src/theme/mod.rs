@@ -53,7 +53,7 @@ use iced::{Color, color};
 
 use oito2_foundation::Density;
 
-use crate::tokens::{Accent, sizes};
+use crate::tokens::Accent;
 
 pub use roles::{
     ChromeColors, ColorRoles, FamilyColors, Palette, SemanticColors, SyntaxColors, tonal_spot,
@@ -203,18 +203,12 @@ impl Theme {
 
     /// Minimum height of buttons and single-line fields.
     pub fn control_height(&self) -> f32 {
-        match self.inner.density {
-            Density::Pointer => sizes::BUTTON_HEIGHT,
-            Density::Touch => sizes::TOUCH_BUTTON_HEIGHT,
-        }
+        crate::density::control_height_of(self.inner.density)
     }
 
     /// Size of icons inside controls.
     pub fn icon_size(&self) -> f32 {
-        match self.inner.density {
-            Density::Pointer => sizes::ICON_SIZE,
-            Density::Touch => 24.0,
-        }
+        crate::density::icon_size_of(self.inner.density)
     }
 
     /// Color of the focus ring drawn around a focused control.

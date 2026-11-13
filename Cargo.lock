@@ -2516,6 +2516,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "oito2_iced_icons"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "oito2_iced_parity"
 version = "0.0.0"
 dependencies = [

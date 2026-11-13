@@ -21,6 +21,7 @@
 //! Set `ICED_BACKEND=tiny-skia` to force the software renderer.
 
 mod appearance;
+mod pages;
 
 use std::time::Instant;
 
@@ -41,6 +42,7 @@ use oito2_iced::widget::{focusable, popover};
 use oito2_iced::window::{Labels, Placement, WindowState};
 use oito2_iced::{Theme, focus, font};
 use oito2_iced_settings::SystemSettings;
+use pages::{Gallery, Page};
 
 fn main() -> iced::Result {
     let application = iced::application(Showcase::new, Showcase::update, Showcase::view)
@@ -83,7 +85,8 @@ struct Showcase {
     appearance: Appearance,
     window: WindowState,
     settings_open: bool,
-    presses: u32,
+    page: Page,
+    gallery: Gallery,
     popover_open: bool,
     checked: bool,
     name: String,
@@ -106,7 +109,8 @@ enum Message {
     Density(DensityChoice),
     Language(Language),
     Desktop(Desktop),
-    Press,
+    Navigate(Page),
+    Gallery(pages::Message),
     TogglePopover,
     DismissPopover,
     Check(bool),
@@ -122,7 +126,8 @@ impl Showcase {
             appearance: Appearance::default(),
             window: WindowState::default(),
             settings_open: false,
-            presses: 0,
+            page: Page::default(),
+            gallery: Gallery::default(),
             popover_open: false,
             checked: false,
             name: String::new(),
@@ -166,7 +171,8 @@ impl Showcase {
             Message::Density(density) => self.appearance.density = density,
             Message::Language(language) => self.appearance.language = language,
             Message::Desktop(desktop) => self.appearance.desktop = desktop,
-            Message::Press => self.presses += 1,
+            Message::Navigate(page) => self.page = page,
+            Message::Gallery(message) => self.gallery.update(message),
             Message::TogglePopover => self.popover_open = !self.popover_open,
             Message::DismissPopover => self.popover_open = false,
             Message::Check(checked) => self.checked = checked,
@@ -197,6 +203,8 @@ impl Showcase {
     }
 
     fn view(&self) -> Element<'_, Message, Theme> {
+        oito2_iced::density::set(self.appearance.density(&self.settings));
+
         let localizations = self.appearance.language.localizations();
         let (style, layout) = self.appearance.chrome(&self.settings);
 
@@ -218,16 +226,6 @@ impl Showcase {
         let action = |label: &'static str, class: ButtonClass<'static>, message: Message| {
             focusable(button(label).class(class).on_press(message.clone())).on_activate(message)
         };
-
-        let buttons = row![
-            action("Filled", ButtonClass::Filled, Message::Press),
-            action("Tonal", ButtonClass::Tonal, Message::Press),
-            action("Outlined", ButtonClass::Outlined, Message::Press),
-            action("Text", ButtonClass::Text, Message::Press),
-            action("Danger", ButtonClass::Danger, Message::Press),
-            focusable(button("Disabled")),
-        ]
-        .spacing(spacing::SM);
 
         let theme_controls = row![
             action("Next accent", ButtonClass::Outlined, Message::NextAccent),
@@ -304,22 +302,48 @@ impl Showcase {
             .width(Length::Fill)
         };
 
-        let page = column![
-            text(format!(
-                "Presses: {} \u{2014} Tab / Shift+Tab move the focus, Enter or Space activate.",
-                self.presses
-            ))
-            .class(TextClass::Variant),
-            card("Buttons", buttons.into()),
+        let overview = column![
+            text("Tab / Shift+Tab move the focus, Enter or Space activate.")
+                .class(TextClass::Variant),
             card("Theme and overlay", theme_controls.into()),
             card("Inputs", inputs.into()),
             card("Font weights", weights.into()),
             card("Animation", animation.into()),
         ]
-        .spacing(spacing::LG)
-        .padding(spacing::PAGE);
+        .spacing(spacing::LG);
 
-        let window = column![header, scrollable(page).height(Length::Fill)];
+        let page: Element<'_, Message, Theme> = match self.gallery.view(self.page, &localizations) {
+            Some(page) => page.map(Message::Gallery),
+            None => overview.into(),
+        };
+
+        let sidebar = container(
+            column(Page::ALL.into_iter().map(|page| {
+                let item = oito2_iced::widget::button::text(page.to_string())
+                    .width(Length::Fill)
+                    .on_press(Message::Navigate(page));
+
+                if page == self.page {
+                    item.class(ButtonClass::Tonal).into()
+                } else {
+                    item.into()
+                }
+            }))
+            .spacing(spacing::XS)
+            .padding(spacing::SM),
+        )
+        .class(ContainerClass::Sidebar)
+        .width(Length::Fixed(200.0))
+        .height(Length::Fill);
+
+        let body = row![
+            sidebar,
+            scrollable(container(page).padding(spacing::PAGE).width(Length::Fill))
+                .height(Length::Fill)
+                .width(Length::Fill),
+        ];
+
+        let window = column![header, body];
 
         let content: Element<'_, Message, Theme> = if self.settings_open {
             stack![window, self.settings_dialog()].into()
@@ -386,12 +410,7 @@ impl Showcase {
                 ),
                 row![
                     iced::widget::space::horizontal(),
-                    focusable(
-                        button("Close")
-                            .class(ButtonClass::Filled)
-                            .on_press(Message::CloseSettings)
-                    )
-                    .on_activate(Message::CloseSettings),
+                    oito2_iced::widget::button::filled("Close").on_press(Message::CloseSettings),
                 ],
             ]
             .spacing(spacing::MD)
@@ -507,6 +526,122 @@ mod tests {
             )
             .roles()
         );
+    }
+
+    /// A window tall enough to show every card of a page without scrolling.
+    const TALL: (f32, f32) = (1280.0, 3200.0);
+
+    /// The showcase on `page`.
+    fn on_page(page: Page) -> Showcase {
+        let mut app = showcase();
+        run(&mut app, [Message::Navigate(page)]);
+        app
+    }
+
+    /// The bounds of every focusable element of the view, whether each one is
+    /// a text input, and whether it is fully visible (not clipped by a
+    /// scrollable).
+    fn focusables(ui: &mut Simulator<'_, Message, Theme>) -> Vec<(iced::Rectangle, bool, bool)> {
+        use iced_test::selector::Candidate;
+
+        let mut found = Vec::new();
+        let mut text_inputs = Vec::new();
+        let _ = ui.find(|candidate: Candidate<'_>| -> Option<()> {
+            match candidate {
+                Candidate::Focusable {
+                    bounds,
+                    visible_bounds,
+                    ..
+                } => found.push((bounds, visible_bounds == Some(bounds))),
+                Candidate::TextInput { bounds, .. } => text_inputs.push(bounds),
+                _ => {}
+            }
+            None
+        });
+
+        found
+            .into_iter()
+            .map(|(bounds, visible)| (bounds, text_inputs.contains(&bounds), visible))
+            .collect()
+    }
+
+    #[test]
+    fn every_page_renders_wide_light_and_compact_dark_portuguese() {
+        for page in Page::ALL {
+            let mut app = on_page(page);
+
+            for (mode, language, size) in [
+                (Mode::Light, Language::English, (1280.0, 800.0)),
+                (Mode::Dark, Language::Portuguese, (560.0, 720.0)),
+            ] {
+                run(&mut app, [Message::Mode(mode), Message::Language(language)]);
+
+                let theme = app.theme();
+                let mut ui =
+                    Simulator::with_size(oito2_iced_test_utils::settings(), size, app.view());
+
+                assert!(ui.snapshot(&theme).is_ok(), "{page} {mode:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn tab_reaches_every_control_of_every_page() {
+        for page in Page::ALL {
+            let app = on_page(page);
+            let mut ui = Simulator::with_size(oito2_iced_test_utils::settings(), TALL, app.view());
+            let expected = focusables(&mut ui);
+
+            let mut reached = Vec::new();
+            for _ in 0..expected.len() {
+                ui.tap_key(iced::keyboard::key::Named::Tab);
+
+                if let Ok(target) = ui.find(iced_test::selector::is_focused()) {
+                    reached.push(target.bounds());
+                }
+            }
+
+            // A scrolled chip bar moves its chips, so the stops are counted
+            // rather than matched by position.
+            let mut distinct = reached.clone();
+            distinct.dedup();
+
+            assert!(!expected.is_empty(), "{page}");
+            assert_eq!(reached.len(), expected.len(), "{page}: a Tab left no focus");
+            assert_eq!(
+                distinct.len(),
+                expected.len(),
+                "{page}: Tab visited {reached:?}, expected {expected:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_clickable_control_shows_the_hand_cursor() {
+        for page in Page::ALL {
+            let app = on_page(page);
+            let mut ui = Simulator::with_size(oito2_iced_test_utils::settings(), TALL, app.view());
+
+            for (bounds, text_input, _) in focusables(&mut ui)
+                .into_iter()
+                .filter(|(_, _, visible)| *visible)
+            {
+                let interaction =
+                    oito2_iced_test_utils::mouse_interaction(app.view(), TALL, bounds.center());
+
+                if text_input {
+                    assert_eq!(interaction, iced::mouse::Interaction::Text, "{page}");
+                } else {
+                    assert!(
+                        matches!(
+                            interaction,
+                            iced::mouse::Interaction::Pointer | iced::mouse::Interaction::Grab
+                        ),
+                        "{page}: {bounds:?} shows {interaction:?}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

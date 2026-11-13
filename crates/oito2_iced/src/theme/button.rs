@@ -18,6 +18,7 @@
 use iced::widget::button::{Catalog, Status, Style, StyleFn};
 use iced::{Background, Border, Color, Shadow, Vector};
 
+use super::container::elevation;
 use super::{
     DISABLED_CONTAINER_OPACITY, DISABLED_CONTENT_OPACITY, HOVER_OPACITY, PRESSED_OPACITY,
     TRANSPARENT, Theme, state_layer,
@@ -42,6 +43,13 @@ pub enum Class<'a> {
     /// Transparent, surface text, fully rounded: window controls and title
     /// bar buttons.
     Chrome,
+    /// Primary container background, large radius and a low shadow: the
+    /// floating action button.
+    Fab,
+    /// Transparent with the variant content color: icon buttons.
+    Icon,
+    /// Secondary container background: a selected toggle icon button.
+    IconSelected,
     /// A styling closure.
     Custom(StyleFn<'a, Theme>),
 }
@@ -78,11 +86,19 @@ impl Catalog for Theme {
             Class::Text => (TRANSPARENT, roles.semantic.primary_text, None),
             Class::Danger => (roles.error, roles.on_error, None),
             Class::Chrome => (TRANSPARENT, roles.on_surface, None),
+            Class::Fab => (roles.primary_container, roles.on_primary_container, None),
+            Class::Icon => (TRANSPARENT, roles.on_surface_variant, None),
+            Class::IconSelected => (
+                roles.secondary_container,
+                roles.on_secondary_container,
+                None,
+            ),
             Class::Custom(style) => return style(self, status),
         };
 
         let radius = match class {
             Class::Chrome => f32::MAX,
+            Class::Fab => radius::LARGE,
             _ => radius::MEDIUM,
         };
 
@@ -117,6 +133,8 @@ impl Catalog for Theme {
                 offset: Vector::new(0.0, 1.0),
                 blur_radius: 3.0,
             },
+            (Class::Fab, Status::Hovered) => elevation(roles.shadow, 3.0),
+            (Class::Fab, Status::Active | Status::Pressed) => elevation(roles.shadow, 2.0),
             _ => Shadow::default(),
         };
 
