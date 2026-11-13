@@ -608,10 +608,13 @@ mod tests {
                         matches!(
                             interaction,
                             // An editable label shows the text cursor, as text
-                            // it can be edited in place.
+                            // it can be edited in place; a divider handle shows
+                            // the resize cursor of its axis.
                             iced::mouse::Interaction::Pointer
                                 | iced::mouse::Interaction::Grab
                                 | iced::mouse::Interaction::Text
+                                | iced::mouse::Interaction::ResizingHorizontally
+                                | iced::mouse::Interaction::ResizingVertically
                         ),
                         "{page}: {bounds:?} shows {interaction:?}"
                     );

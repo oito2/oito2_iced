@@ -44,6 +44,9 @@ pub const EASE_OUT_CUBIC: Easing = Easing::Custom(ease_out_cubic);
 /// Cubic ease-in-out.
 pub const EASE_IN_OUT_CUBIC: Easing = Easing::Custom(ease_in_out_cubic);
 
+/// The standard ease-in-out curve.
+pub const EASE_IN_OUT: Easing = Easing::Custom(ease_in_out);
+
 /// Returns `duration`, or zero when the user asked for reduced motion, so
 /// the animation jumps to its end.
 pub fn motion_duration(duration: Duration, reduce_motion: bool) -> Duration {
@@ -99,6 +102,11 @@ pub fn ease_in_out_cubic(t: f32) -> f32 {
     cubic(0.645, 0.045, 0.355, 1.0, t)
 }
 
+/// The standard ease-in-out: control points (0.42, 0) and (0.58, 1).
+pub fn ease_in_out(t: f32) -> f32 {
+    cubic(0.42, 0.0, 0.58, 1.0, t)
+}
+
 /// A unit cubic Bézier from (0, 0) to (1, 1) with control points (a, b) and
 /// (c, d), evaluated at x = `t` by bisection with an error below 0.001.
 fn cubic(a: f32, b: f32, c: f32, d: f32, t: f32) -> f32 {
@@ -139,7 +147,7 @@ mod tests {
 
     #[test]
     fn curves_start_at_zero_and_end_at_one() {
-        for curve in [emphasized, ease_out_cubic, ease_in_out_cubic] {
+        for curve in [emphasized, ease_out_cubic, ease_in_out_cubic, ease_in_out] {
             assert_eq!(curve(0.0), 0.0);
             assert_eq!(curve(1.0), 1.0);
         }

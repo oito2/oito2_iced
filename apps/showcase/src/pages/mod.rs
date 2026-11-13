@@ -21,10 +21,14 @@ mod containers;
 mod entries;
 mod groups;
 mod icons;
+mod layout;
+mod navigation;
 mod progress;
 mod toggles;
 
 use std::fmt;
+
+use oito2_iced::widget::splitter;
 
 use iced::font::Weight;
 use iced::widget::{column, container, text};
@@ -52,6 +56,10 @@ pub enum Page {
     Entries,
     /// Containers, sections, tiles, banners and info boxes.
     Containers,
+    /// Expandable sections, scroll areas, splitters and paned views.
+    Layout,
+    /// Tab bars, navigation rails and pages, and master-detail pages.
+    Navigation,
     /// Progress indicators.
     Progress,
     /// Icons.
@@ -60,13 +68,15 @@ pub enum Page {
 
 impl Page {
     /// Every page, in the order of the sidebar.
-    pub const ALL: [Page; 8] = [
+    pub const ALL: [Page; 10] = [
         Page::Overview,
         Page::Buttons,
         Page::Toggles,
         Page::Groups,
         Page::Entries,
         Page::Containers,
+        Page::Layout,
+        Page::Navigation,
         Page::Progress,
         Page::Icons,
     ];
@@ -81,6 +91,8 @@ impl fmt::Display for Page {
             Page::Groups => "Groups",
             Page::Entries => "Entries",
             Page::Containers => "Containers",
+            Page::Layout => "Layout",
+            Page::Navigation => "Navigation",
             Page::Progress => "Progress",
             Page::Icons => "Icons",
         })
@@ -122,6 +134,18 @@ pub struct Gallery {
     copies: f64,
     price: f64,
     document_name: String,
+    expanded: bool,
+    panel: Vec<bool>,
+    split: splitter::State,
+    nested_split: splitter::State,
+    pane_size: f32,
+    tab: usize,
+    subtle_tab: usize,
+    vertical_tab: usize,
+    rail: usize,
+    destination: usize,
+    device: Option<usize>,
+    device_pane: f32,
 }
 
 impl Default for Gallery {
@@ -148,6 +172,18 @@ impl Default for Gallery {
             copies: 1.0,
             price: 1234.5,
             document_name: "Project notes".to_owned(),
+            expanded: false,
+            panel: vec![false, true, false],
+            split: splitter::State::new(),
+            nested_split: splitter::State::new(),
+            pane_size: 240.0,
+            tab: 0,
+            subtle_tab: 0,
+            vertical_tab: 0,
+            rail: 0,
+            destination: 0,
+            device: Some(1),
+            device_pane: 240.0,
         }
     }
 }
@@ -197,6 +233,30 @@ pub enum Message {
     Price(f64),
     /// The document was renamed.
     Rename(String),
+    /// The expandable section was opened or closed.
+    Expanded(bool),
+    /// A section of the expansion panel was opened or closed.
+    Panel(usize, bool),
+    /// The splitter moved.
+    Split(splitter::State),
+    /// The nested splitter moved.
+    NestedSplit(splitter::State),
+    /// The paned view divider moved.
+    PaneSize(f32),
+    /// A tab of the pill tab bar was chosen.
+    Tab(usize),
+    /// A tab of the subtle tab bar was chosen.
+    SubtleTab(usize),
+    /// A vertical tab was chosen.
+    VerticalTab(usize),
+    /// A rail destination was chosen.
+    Rail(usize),
+    /// A destination of the navigation page was chosen.
+    Destination(usize),
+    /// A device was chosen in the master-detail page, or the detail closed.
+    Device(Option<usize>),
+    /// The master pane of the master-detail page was resized.
+    DevicePane(f32),
 }
 
 impl Gallery {
@@ -237,6 +297,22 @@ impl Gallery {
             Message::Copies(copies) => self.copies = copies,
             Message::Price(price) => self.price = price,
             Message::Rename(name) => self.document_name = name,
+            Message::Expanded(expanded) => self.expanded = expanded,
+            Message::Panel(index, open) => {
+                if let Some(section) = self.panel.get_mut(index) {
+                    *section = open;
+                }
+            }
+            Message::Split(state) => self.split = state,
+            Message::NestedSplit(state) => self.nested_split = state,
+            Message::PaneSize(size) => self.pane_size = size,
+            Message::Tab(index) => self.tab = index,
+            Message::SubtleTab(index) => self.subtle_tab = index,
+            Message::VerticalTab(index) => self.vertical_tab = index,
+            Message::Rail(index) => self.rail = index,
+            Message::Destination(index) => self.destination = index,
+            Message::Device(device) => self.device = device,
+            Message::DevicePane(size) => self.device_pane = size,
         }
     }
 
@@ -254,6 +330,8 @@ impl Gallery {
             Page::Groups => Some(groups::view(self, localizations)),
             Page::Entries => Some(entries::view(self, localizations)),
             Page::Containers => Some(containers::view(self)),
+            Page::Layout => Some(layout::view(self)),
+            Page::Navigation => Some(navigation::view(self, localizations)),
             Page::Progress => Some(progress::view(self)),
             Page::Icons => Some(icons::view()),
         }
