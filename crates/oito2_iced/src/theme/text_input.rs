@@ -65,17 +65,18 @@ impl Catalog for Theme {
         }
         .rounded(radius::MEDIUM);
 
-        let value = if status == Status::Disabled {
-            roles.on_surface.scale_alpha(DISABLED_CONTENT_OPACITY)
+        let disabled = roles.on_surface.scale_alpha(DISABLED_CONTENT_OPACITY);
+        let (value, variant) = if status == Status::Disabled {
+            (disabled, disabled)
         } else {
-            roles.on_surface
+            (roles.on_surface, roles.on_surface_variant)
         };
 
         Style {
             background: Background::Color(roles.surface_container_high),
             border,
-            icon: roles.on_surface_variant,
-            placeholder: roles.on_surface_variant,
+            icon: variant,
+            placeholder: variant,
             value,
             selection: roles.primary.scale_alpha(SELECTION_OPACITY),
         }

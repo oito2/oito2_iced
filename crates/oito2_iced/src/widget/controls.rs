@@ -271,8 +271,18 @@ impl<'a, Message: Clone + 'a> From<ToggleButton<'a, Message>> for Element<'a, Me
 
 /// Lays out, draws and forwards input to its content, but hides it from
 /// widget operations, so nothing inside takes the keyboard focus.
-struct ExcludeFocus<'a, Message> {
+pub(crate) struct ExcludeFocus<'a, Message> {
     content: Element<'a, Message>,
+}
+
+/// Hides `content` from widget operations, so nothing inside takes the
+/// keyboard focus, while it still lays out, draws and takes input.
+pub(crate) fn exclude_focus<'a, Message: 'a>(
+    content: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    Element::new(ExcludeFocus {
+        content: content.into(),
+    })
 }
 
 impl<Message> Widget<Message, Theme, iced::Renderer> for ExcludeFocus<'_, Message> {

@@ -18,6 +18,7 @@
 
 mod buttons;
 mod containers;
+mod entries;
 mod groups;
 mod icons;
 mod progress;
@@ -47,6 +48,8 @@ pub enum Page {
     Toggles,
     /// Segment and toggle groups, choice chips and sliders.
     Groups,
+    /// Text fields and the fields built on them.
+    Entries,
     /// Containers, sections, tiles, banners and info boxes.
     Containers,
     /// Progress indicators.
@@ -57,11 +60,12 @@ pub enum Page {
 
 impl Page {
     /// Every page, in the order of the sidebar.
-    pub const ALL: [Page; 7] = [
+    pub const ALL: [Page; 8] = [
         Page::Overview,
         Page::Buttons,
         Page::Toggles,
         Page::Groups,
+        Page::Entries,
         Page::Containers,
         Page::Progress,
         Page::Icons,
@@ -75,6 +79,7 @@ impl fmt::Display for Page {
             Page::Buttons => "Buttons",
             Page::Toggles => "Toggles",
             Page::Groups => "Groups",
+            Page::Entries => "Entries",
             Page::Containers => "Containers",
             Page::Progress => "Progress",
             Page::Icons => "Icons",
@@ -108,6 +113,15 @@ pub struct Gallery {
     volume: f32,
     selectable: bool,
     banner: bool,
+    name: String,
+    email: String,
+    password: String,
+    search: String,
+    title_search: String,
+    title_search_active: bool,
+    copies: f64,
+    price: f64,
+    document_name: String,
 }
 
 impl Default for Gallery {
@@ -125,6 +139,15 @@ impl Default for Gallery {
             volume: 40.0,
             selectable: false,
             banner: false,
+            name: String::new(),
+            email: String::new(),
+            password: String::new(),
+            search: String::new(),
+            title_search: String::new(),
+            title_search_active: false,
+            copies: 1.0,
+            price: 1234.5,
+            document_name: "Project notes".to_owned(),
         }
     }
 }
@@ -156,6 +179,24 @@ pub enum Message {
     Selectable(bool),
     /// The banner was pressed.
     Banner,
+    /// The name field changed.
+    Name(String),
+    /// The email field changed.
+    Email(String),
+    /// The password field changed.
+    Password(String),
+    /// The search field changed.
+    Search(String),
+    /// The title search field changed.
+    TitleSearch(String),
+    /// The title search opened or closed.
+    TitleSearchActive(bool),
+    /// The copies entry changed.
+    Copies(f64),
+    /// The price entry changed.
+    Price(f64),
+    /// The document was renamed.
+    Rename(String),
 }
 
 impl Gallery {
@@ -182,6 +223,20 @@ impl Gallery {
             Message::Volume(volume) => self.volume = volume,
             Message::Selectable(selected) => self.selectable = selected,
             Message::Banner => self.banner = !self.banner,
+            Message::Name(name) => self.name = name,
+            Message::Email(email) => self.email = email,
+            Message::Password(password) => self.password = password,
+            Message::Search(search) => self.search = search,
+            Message::TitleSearch(search) => self.title_search = search,
+            Message::TitleSearchActive(active) => {
+                self.title_search_active = active;
+                if !active {
+                    self.title_search.clear();
+                }
+            }
+            Message::Copies(copies) => self.copies = copies,
+            Message::Price(price) => self.price = price,
+            Message::Rename(name) => self.document_name = name,
         }
     }
 
@@ -197,6 +252,7 @@ impl Gallery {
             Page::Buttons => Some(buttons::view(self, localizations)),
             Page::Toggles => Some(toggles::view(self)),
             Page::Groups => Some(groups::view(self, localizations)),
+            Page::Entries => Some(entries::view(self, localizations)),
             Page::Containers => Some(containers::view(self)),
             Page::Progress => Some(progress::view(self)),
             Page::Icons => Some(icons::view()),

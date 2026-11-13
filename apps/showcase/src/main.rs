@@ -26,10 +26,7 @@ mod pages;
 use std::time::Instant;
 
 use iced::font::Weight;
-use iced::widget::{
-    button, checkbox, column, container, opaque, pick_list, row, scrollable, stack, text,
-    text_input,
-};
+use iced::widget::{button, column, container, opaque, pick_list, row, scrollable, stack, text};
 use iced::{Element, Length, Subscription, Task, window};
 
 use appearance::{Appearance, ContrastChoice, DensityChoice, Desktop, Family, Language, Mode};
@@ -88,8 +85,6 @@ struct Showcase {
     page: Page,
     gallery: Gallery,
     popover_open: bool,
-    checked: bool,
-    name: String,
     expanded: Animation<bool>,
     now: Instant,
 }
@@ -113,8 +108,6 @@ enum Message {
     Gallery(pages::Message),
     TogglePopover,
     DismissPopover,
-    Check(bool),
-    Name(String),
     Animate,
     Frame(Instant),
 }
@@ -129,8 +122,6 @@ impl Showcase {
             page: Page::default(),
             gallery: Gallery::default(),
             popover_open: false,
-            checked: false,
-            name: String::new(),
             expanded: animation::emphasized_animation(false, animation::duration::EXTRA_LONG),
             now: Instant::now(),
         }
@@ -175,8 +166,6 @@ impl Showcase {
             Message::Gallery(message) => self.gallery.update(message),
             Message::TogglePopover => self.popover_open = !self.popover_open,
             Message::DismissPopover => self.popover_open = false,
-            Message::Check(checked) => self.checked = checked,
-            Message::Name(name) => self.name = name,
             Message::Animate => {
                 self.now = Instant::now();
                 let target = !self.expanded.value();
@@ -243,22 +232,6 @@ impl Showcase {
         ]
         .spacing(spacing::SM);
 
-        let inputs = row![
-            focusable(
-                checkbox(self.checked)
-                    .label("Checkbox")
-                    .on_toggle(Message::Check)
-            )
-            .on_activate(Message::Check(!self.checked))
-            .radius(oito2_iced::tokens::radius::CHECK),
-            text_input("Text input", &self.name)
-                .on_input(Message::Name)
-                .padding([7.0, spacing::MD])
-                .width(240),
-        ]
-        .spacing(spacing::LG)
-        .align_y(iced::Alignment::Center);
-
         let weights = column(
             [
                 ("Regular 400", Weight::Normal),
@@ -306,7 +279,6 @@ impl Showcase {
             text("Tab / Shift+Tab move the focus, Enter or Space activate.")
                 .class(TextClass::Variant),
             card("Theme and overlay", theme_controls.into()),
-            card("Inputs", inputs.into()),
             card("Font weights", weights.into()),
             card("Animation", animation.into()),
         ]
@@ -635,7 +607,11 @@ mod tests {
                     assert!(
                         matches!(
                             interaction,
-                            iced::mouse::Interaction::Pointer | iced::mouse::Interaction::Grab
+                            // An editable label shows the text cursor, as text
+                            // it can be edited in place.
+                            iced::mouse::Interaction::Pointer
+                                | iced::mouse::Interaction::Grab
+                                | iced::mouse::Interaction::Text
                         ),
                         "{page}: {bounds:?} shows {interaction:?}"
                     );
