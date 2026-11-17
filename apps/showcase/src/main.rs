@@ -244,6 +244,9 @@ impl Showcase {
                 self.palette_open = true;
                 self.palette_query.clear();
             }
+            Message::Gallery(pages::Message::TocPick(index)) => {
+                return self.gallery.scroll_to_section(index);
+            }
             Message::Gallery(message) => self.gallery.update(message),
             Message::Key(event) => {
                 if let Some(chord) = KeyChord::from_keyboard_event(&event)
@@ -831,9 +834,28 @@ mod tests {
             let app = on_page(page);
             let mut ui = Simulator::with_size(oito2_iced_test_utils::settings(), TALL, app.view());
 
+            // A carousel takes the focus as a whole for its keys; only its
+            // buttons and dots are clickable, and they are checked apart.
+            let carousel = iced::widget::Id::new(pages::display::CAROUSEL);
+            let mut carousels = Vec::new();
+            let _ = ui.find(
+                |candidate: iced_test::selector::Candidate<'_>| -> Option<()> {
+                    if let iced_test::selector::Candidate::Focusable {
+                        id: Some(id),
+                        bounds,
+                        ..
+                    } = candidate
+                        && *id == carousel
+                    {
+                        carousels.push(bounds);
+                    }
+                    None
+                },
+            );
+
             for (bounds, text_input, _) in focusables(&mut ui)
                 .into_iter()
-                .filter(|(_, _, visible)| *visible)
+                .filter(|(bounds, _, visible)| *visible && !carousels.contains(bounds))
             {
                 let interaction =
                     oito2_iced_test_utils::mouse_interaction(app.view(), TALL, bounds.center());

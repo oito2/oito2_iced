@@ -22,6 +22,8 @@ oito2_foundation.workspace = true
 default = ["svg"]
 # Style catalog of the vector image widget.
 svg = ["iced/svg"]
+# Raster images: the picture of an avatar.
+image = ["iced/image"]
 # Style catalog of the QR code widget.
 qr_code = ["iced/qr_code"]
 # Style catalog of the Markdown widget.

@@ -18,6 +18,8 @@
 
 mod buttons;
 mod containers;
+mod data;
+pub mod display;
 mod entries;
 mod groups;
 mod icons;
@@ -29,16 +31,19 @@ mod progress;
 mod toggles;
 
 use std::fmt;
+use std::time::Instant;
 
 use oito2_iced::collections::ListCollection;
 use oito2_iced::date::{Date, Time};
 use oito2_iced::widget::calendar::DateRange;
 use oito2_iced::widget::entries::Part;
+use oito2_iced::widget::list_box::SelectionChange;
 use oito2_iced::widget::splitter;
+use oito2_iced::widget::tree_view::TreeEvent;
 
 use iced::font::Weight;
 use iced::widget::{column, container, text};
-use iced::{Color, Element, Length};
+use iced::{Color, Element, Length, Point, Task};
 
 use oito2_iced::l10n::Localizations;
 use oito2_iced::theme::container::Class as ContainerClass;
@@ -70,6 +75,10 @@ pub enum Page {
     Overlays,
     /// Rating, range and angle sliders, codes, tags, dates, times and colors.
     Pickers,
+    /// List boxes, trees, pagination, steps and tables of contents.
+    Data,
+    /// Avatars, timers, swaps, carousels, clips and draggable content.
+    Display,
     /// Progress indicators.
     Progress,
     /// Icons.
@@ -78,7 +87,7 @@ pub enum Page {
 
 impl Page {
     /// Every page, in the order of the sidebar.
-    pub const ALL: [Page; 12] = [
+    pub const ALL: [Page; 14] = [
         Page::Overview,
         Page::Buttons,
         Page::Toggles,
@@ -89,6 +98,8 @@ impl Page {
         Page::Navigation,
         Page::Overlays,
         Page::Pickers,
+        Page::Data,
+        Page::Display,
         Page::Progress,
         Page::Icons,
     ];
@@ -107,6 +118,8 @@ impl fmt::Display for Page {
             Page::Navigation => "Navigation",
             Page::Overlays => "Overlays",
             Page::Pickers => "Pickers",
+            Page::Data => "Data",
+            Page::Display => "Display",
             Page::Progress => "Progress",
             Page::Icons => "Icons",
         })
@@ -190,6 +203,8 @@ pub struct Gallery {
     disk: usize,
     color: Color,
     color_open: bool,
+    data: data::Data,
+    display: display::Display,
 }
 
 impl Default for Gallery {
@@ -266,6 +281,8 @@ impl Default for Gallery {
             disk: 0,
             color: pickers::DISKS[0].1,
             color_open: false,
+            data: data::Data::default(),
+            display: display::Display::default(),
         }
     }
 }
@@ -401,6 +418,38 @@ pub enum Message {
     Color(Color),
     /// The color picker button opened or closed.
     ColorOpen(bool),
+    /// The fruit list box selection changed.
+    Fruits(SelectionChange),
+    /// A fruit of the list box was activated.
+    FruitActivated(String),
+    /// The file tree changed.
+    Files(TreeEvent),
+    /// The JSON tree changed.
+    Json(TreeEvent),
+    /// A page of the pagination was chosen.
+    DataPage(u32),
+    /// A page size was chosen.
+    PageSize(u32),
+    /// The page size menu opened or closed.
+    PageSizeOpen(bool),
+    /// A step was chosen.
+    Step(usize),
+    /// An entry of the table of contents was picked.
+    TocPick(usize),
+    /// The document scrolled to another section.
+    Section(usize),
+    /// A timer button was pressed.
+    Timer(display::TimerAction),
+    /// The countdown completed.
+    TimerTick(Instant),
+    /// The play swaps were pressed.
+    Playing(bool),
+    /// The carousel asked for a page.
+    Slide(usize),
+    /// A page indicator dot was chosen.
+    Indicator(usize),
+    /// The draggable note moved.
+    Note(Point),
 }
 
 /// Today's date in UTC, or 2026-01-01 when the clock is before 1970.
@@ -510,11 +559,54 @@ impl Gallery {
             }
             Message::Color(color) => self.color = color,
             Message::ColorOpen(open) => self.color_open = open,
+            Message::Fruits(change) => {
+                if let Some(fruits) = &mut self.data.fruits {
+                    change.apply(fruits);
+                }
+            }
+            Message::Files(event) => {
+                if let Some(files) = &self.data.files {
+                    self.data.files_state.apply(files, event);
+                }
+            }
+            Message::Json(event) => self.data.json_state.apply(&self.data.json, event),
+            Message::DataPage(page) => self.data.page = page,
+            Message::PageSize(size) => {
+                self.data.page_size = size;
+                self.data.page_size_open = false;
+            }
+            Message::PageSizeOpen(open) => self.data.page_size_open = open,
+            Message::Step(step) => self.data.step = step,
+            Message::Section(section) => self.data.section = section,
+            Message::Timer(action) => self.display.timer(action, Instant::now()),
+            Message::TimerTick(at) => {
+                self.display.timer.tick(at);
+            }
+            Message::Playing(playing) => self.display.playing = playing,
+            Message::Slide(page) => self.display.carousel.go_to(page),
+            Message::Indicator(page) => self.display.indicator = page,
+            Message::Note(point) => self.display.note = point,
+            Message::FruitActivated(fruit) => self.data.opened = Some(fruit),
+            Message::TocPick(_) => {}
             Message::OpenSheet(_)
             | Message::OpenDialog
             | Message::ShowToast
             | Message::OpenPalette => {}
         }
+    }
+
+    /// The task that scrolls the document of the data page to the section
+    /// of table of contents entry `index`.
+    pub fn scroll_to_section<T: Send + 'static>(&self, index: usize) -> Task<T> {
+        self.data
+            .entries
+            .get(index)
+            .map_or_else(Task::none, |entry| {
+                oito2_iced::widget::table_of_contents::scroll_to(
+                    data::DOCUMENT,
+                    entry.target.clone(),
+                )
+            })
     }
 
     /// The content of a component page; `None` for the overview, which the
@@ -535,6 +627,8 @@ impl Gallery {
             Page::Navigation => Some(navigation::view(self, localizations)),
             Page::Overlays => Some(overlays::view(self)),
             Page::Pickers => Some(pickers::view(self, localizations)),
+            Page::Data => Some(data::view(self, localizations)),
+            Page::Display => Some(display::view(self, localizations)),
             Page::Progress => Some(progress::view(self)),
             Page::Icons => Some(icons::view()),
         }
