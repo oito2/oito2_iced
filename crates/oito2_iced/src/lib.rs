@@ -40,6 +40,7 @@
 
 pub mod animation;
 pub mod collections;
+pub mod date;
 pub mod density;
 pub mod focus;
 pub mod font;

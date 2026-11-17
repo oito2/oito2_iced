@@ -16,6 +16,7 @@
 //! Checks the localized strings against `l10n.json`, the parity fixture
 //! exported by `oito2_ui`.
 
+use oito2_iced::date::{Date, Time};
 use oito2_iced::l10n::{Localizations, TimeUnit};
 use serde_json::Value;
 
@@ -118,7 +119,7 @@ fn material_strings_match() {
     }
 
     println!("l10n: {checked} material strings checked");
-    assert_eq!(checked, 40);
+    assert_eq!(checked, 42);
 }
 
 #[test]
@@ -220,5 +221,118 @@ fn locale_lookup_follows_the_language_code() {
 
     for tag in ["en", "en-US", "de", "xx", ""] {
         assert_eq!(Localizations::for_locale(tag).locale_name, "en", "{tag}");
+    }
+}
+
+fn iso(text: &str) -> Date {
+    iso_in_range(text).expect("valid date")
+}
+
+/// The date of an ISO `yyyy-mm-dd` text, or `None` when its year is outside
+/// the range of `Date`.
+fn iso_in_range(text: &str) -> Option<Date> {
+    let mut parts = text
+        .split('-')
+        .map(|p| p.parse::<u32>().expect("ISO date part"));
+    let (year, month, day) = (
+        parts.next().expect("year"),
+        parts.next().expect("month"),
+        parts.next().expect("day"),
+    );
+    Date::new(i32::try_from(year).expect("year"), month, day)
+}
+
+#[test]
+fn calendar_data_matches() {
+    let fixture = fixture();
+
+    for (tag, l) in locales() {
+        let dates = &fixture[tag]["dates"];
+
+        assert_eq!(
+            i64::from(l.first_day_of_week()),
+            int(&dates["firstDayOfWeekIndex"]),
+            "{tag}"
+        );
+
+        let weekdays: Vec<&str> = dates["narrowWeekdays"]
+            .as_array()
+            .expect("weekdays")
+            .iter()
+            .map(text)
+            .collect();
+        assert_eq!(weekdays, l.narrow_weekdays(), "{tag}");
+    }
+}
+
+#[test]
+fn date_formats_match() {
+    let fixture = fixture();
+
+    for (tag, l) in locales() {
+        let dates = &fixture[tag]["dates"];
+
+        for case in dates["monthYear"].as_array().expect("monthYear") {
+            let date = iso(text(&case["date"]));
+            assert_eq!(l.month_year(date), text(&case["result"]), "{tag} {date}");
+        }
+
+        for case in dates["compactDate"].as_array().expect("compactDate") {
+            let date = iso(text(&case["date"]));
+            assert_eq!(l.compact_date(date), text(&case["result"]), "{tag} {date}");
+        }
+
+        for case in dates["parseCompactDate"]
+            .as_array()
+            .expect("parseCompactDate")
+        {
+            let input = text(&case["text"]);
+            // A year 0 result has no `Date`, so the parser returns `None`.
+            let expected = case["result"].as_str().and_then(iso_in_range);
+            assert_eq!(l.parse_compact_date(input), expected, "{tag} {input:?}");
+        }
+
+        let reference = iso(text(&dates["parseDateReference"]));
+
+        for case in dates["parseDate"].as_array().expect("parseDate") {
+            let input = text(&case["text"]);
+            let expected = case["result"].as_str().map(iso);
+            assert_eq!(l.parse_date(input, reference), expected, "{tag} {input:?}");
+        }
+    }
+}
+
+#[test]
+fn time_formats_match() {
+    let fixture = fixture();
+
+    for (tag, l) in locales() {
+        let dates = &fixture[tag]["dates"];
+
+        for case in dates["timeOfDay"].as_array().expect("timeOfDay") {
+            let hour = u32::try_from(int(&case["hour"])).expect("hour");
+            let minute = u32::try_from(int(&case["minute"])).expect("minute");
+            let time = Time::new(hour, minute).expect("valid time");
+            assert_eq!(
+                l.time_of_day(time, false),
+                text(&case["h12"]),
+                "{tag} {time}"
+            );
+            assert_eq!(
+                l.time_of_day(time, true),
+                text(&case["h24"]),
+                "{tag} {time}"
+            );
+        }
+
+        for case in dates["parseTime"].as_array().expect("parseTime") {
+            let input = text(&case["text"]);
+            let expected = case["result"].as_array().map(|pair| {
+                let hour = u32::try_from(int(&pair[0])).expect("hour");
+                let minute = u32::try_from(int(&pair[1])).expect("minute");
+                Time::new(hour, minute).expect("valid time")
+            });
+            assert_eq!(l.parse_time(input), expected, "{tag} {input:?}");
+        }
     }
 }

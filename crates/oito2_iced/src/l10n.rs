@@ -17,6 +17,8 @@
 
 use std::ops::Deref;
 
+use crate::date::{Date, Time};
+
 /// Declares a table of strings with one `&'static str` field per key and the
 /// English and Portuguese values of every field.
 macro_rules! string_table {
@@ -92,7 +94,10 @@ next_month = "Next month" | "Próximo mês";
 /// The Material "today" string.
 today = "Today" | "Hoje";
 /// The Material "selectDate" string.
-select_date = "Select date" | "Selecione a data";}
+select_date = "Select date" | "Selecione a data";
+/// The Material "selectTime" string.
+select_time = "Select time" | "Selecione o horário";
+}
 
 string_table! {
 /// The plain strings of the OITO2 widgets: window controls, handles,
@@ -596,4 +601,250 @@ impl Localizations {
             format!("{name}: pastas não são aceitas"),
         )
     }
+}
+
+/// English month names, January first.
+const MONTHS_EN: [&str; 12] = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+
+/// Portuguese month names, January first.
+const MONTHS_PT: [&str; 12] = [
+    "janeiro",
+    "fevereiro",
+    "março",
+    "abril",
+    "maio",
+    "junho",
+    "julho",
+    "agosto",
+    "setembro",
+    "outubro",
+    "novembro",
+    "dezembro",
+];
+
+/// Calendar data and date and time formats of the date and time widgets.
+impl Localizations {
+    /// The first day of a calendar week, from 0 (Sunday) to 6 (Saturday).
+    #[must_use]
+    pub fn first_day_of_week(&self) -> u32 {
+        0
+    }
+
+    /// One-letter weekday names, Sunday first.
+    #[must_use]
+    pub fn narrow_weekdays(&self) -> [&'static str; 7] {
+        match self.language {
+            Language::English => ["S", "M", "T", "W", "T", "F", "S"],
+            Language::Portuguese => ["D", "S", "T", "Q", "Q", "S", "S"],
+        }
+    }
+
+    /// The name of `month` (1 to 12): "November" in English, "novembro" in
+    /// Portuguese. Out-of-range months are clamped.
+    #[must_use]
+    pub fn month_name(&self, month: u32) -> &'static str {
+        let index = usize::try_from(month.clamp(1, 12) - 1).unwrap_or(0);
+
+        match self.language {
+            Language::English => MONTHS_EN[index],
+            Language::Portuguese => MONTHS_PT[index],
+        }
+    }
+
+    /// The month and year of `date`, as a calendar heading: "November 2026"
+    /// or "novembro de 2026".
+    #[must_use]
+    pub fn month_year(&self, date: Date) -> String {
+        let month = self.month_name(date.month());
+
+        self.pick(
+            format!("{month} {}", date.year()),
+            format!("{month} de {}", date.year()),
+        )
+    }
+
+    /// `date` in the compact numeric format: `mm/dd/yyyy` in English,
+    /// `dd/mm/yyyy` in Portuguese.
+    #[must_use]
+    pub fn compact_date(&self, date: Date) -> String {
+        let (year, month, day) = (date.year(), date.month(), date.day());
+
+        self.pick(
+            format!("{month:02}/{day:02}/{year:04}"),
+            format!("{day:02}/{month:02}/{year:04}"),
+        )
+    }
+
+    /// Parses a date in the compact numeric format of
+    /// [`compact_date`](Self::compact_date): three groups of digits split by
+    /// `/`, in the language's order, without surrounding spaces. Returns
+    /// `None` for any other text, a day that does not exist or a year
+    /// outside [`Date::MIN`]..=[`Date::MAX`].
+    #[must_use]
+    pub fn parse_compact_date(&self, text: &str) -> Option<Date> {
+        let (year, month, day) = self.compact_parts(text)?;
+
+        Date::new(year, month, day)
+    }
+
+    /// Parses a date as a date entry does: the compact numeric format of
+    /// [`parse_compact_date`](Self::parse_compact_date), ignoring
+    /// surrounding spaces.
+    ///
+    /// A year written with one or two digits is taken as the year with
+    /// those last digits that falls from 80 years before to 19 years after
+    /// the year of `reference`, so `26` reads as 2026 in 2026 and `99` as
+    /// 1999. A year written with three or more digits is used as written.
+    /// Returns `None` when the text does not parse.
+    #[must_use]
+    pub fn parse_date(&self, text: &str, reference: Date) -> Option<Date> {
+        let text = text.trim();
+        let (year, month, day) = self.compact_parts(text)?;
+
+        if year >= 100 || has_long_number(text) {
+            return Date::new(year, month, day);
+        }
+
+        let reference = reference.year();
+        let mut year = reference - reference % 100 + year;
+
+        if year > reference + 19 {
+            year -= 100;
+        } else if year < reference - 80 {
+            year += 100;
+        }
+
+        Date::new(year, month, day)
+    }
+
+    /// The year, month and day of a date in the compact numeric format,
+    /// checked against the calendar with the year as written (year 0
+    /// included), or `None` when the text does not parse.
+    fn compact_parts(&self, text: &str) -> Option<(i32, u32, u32)> {
+        let mut parts = text.split('/');
+        let (first, second, year) = (parts.next()?, parts.next()?, parts.next()?);
+
+        if parts.next().is_some() {
+            return None;
+        }
+
+        let number = |part: &str| -> Option<u32> {
+            if part.is_empty() || !part.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            part.parse().ok()
+        };
+        let (first, second, year) = (number(first)?, number(second)?, number(year)?);
+        let (month, day) = match self.language {
+            Language::English => (first, second),
+            Language::Portuguese => (second, first),
+        };
+        let year = i32::try_from(year).ok()?;
+
+        // Year 0 is a leap year; any other year shares its leap rule with
+        // the dates `Date` supports.
+        let leap_year = if year == 0 { 2000 } else { year };
+        let valid = (1..=12).contains(&month)
+            && day >= 1
+            && Date::new(leap_year.min(9999), month, 1)
+                .is_some_and(|first| day <= first.days_in_month());
+
+        valid.then_some((year, month, day))
+    }
+
+    /// `time` as text: `h:mm AM` in English unless `use_24_hour` is set,
+    /// `HH:mm` otherwise and always in Portuguese.
+    #[must_use]
+    pub fn time_of_day(&self, time: Time, use_24_hour: bool) -> String {
+        let (hour, minute) = (time.hour(), time.minute());
+
+        if use_24_hour || self.language == Language::Portuguese {
+            return format!("{hour:02}:{minute:02}");
+        }
+
+        let marker = if hour < 12 {
+            self.material.am
+        } else {
+            self.material.pm
+        };
+        let hour = match hour % 12 {
+            0 => 12,
+            h => h,
+        };
+
+        format!("{hour}:{minute:02} {marker}")
+    }
+
+    /// Parses a time typed in a time entry: an hour of one or two digits, a
+    /// separator (`:`, `.`, `h` or `H`), two minute digits and an optional
+    /// AM or PM marker before or after (the language's markers, or `a`,
+    /// `am`, `p`, `pm`, in any case). Without a marker the hour is 0 to 23;
+    /// with one it is 1 to 12. Returns `None` for any other text.
+    #[must_use]
+    pub fn parse_time(&self, text: &str) -> Option<Time> {
+        let text = text.trim();
+        let digits_at = text.find(|c: char| c.is_ascii_digit())?;
+        let prefix = text[..digits_at].trim_end().to_lowercase();
+        let rest = &text[digits_at..];
+
+        let hour_len = rest.bytes().take_while(u8::is_ascii_digit).count();
+        if hour_len > 2 {
+            return None;
+        }
+        let hour: u32 = rest[..hour_len].parse().ok()?;
+
+        let rest = rest[hour_len..].trim_start();
+        let rest = rest.strip_prefix([':', '.', 'h', 'H'])?.trim_start();
+
+        let minute_digits = rest.get(..2)?;
+        if !minute_digits.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        let minute: u32 = minute_digits.parse().ok()?;
+
+        let suffix = rest[2..].trim_start();
+        if suffix.chars().any(char::is_whitespace) {
+            return None;
+        }
+        let suffix = suffix.to_lowercase();
+
+        if minute > 59 || (!prefix.is_empty() && !suffix.is_empty()) {
+            return None;
+        }
+
+        let marker = if suffix.is_empty() { prefix } else { suffix };
+        if marker.is_empty() {
+            return Time::new(hour, minute);
+        }
+
+        let am = self.material.am.to_lowercase();
+        let pm = self.material.pm.to_lowercase();
+        let is_am = marker == am || marker == "a" || marker == "am";
+        let is_pm = marker == pm || marker == "p" || marker == "pm";
+
+        if !is_am && !is_pm || !(1..=12).contains(&hour) {
+            return None;
+        }
+
+        Time::new(hour % 12 + if is_pm { 12 } else { 0 }, minute)
+    }
+}
+
+/// Whether `text` holds a run of three or more ASCII digits.
+fn has_long_number(text: &str) -> bool {
+    text.split(|c: char| !c.is_ascii_digit())
+        .any(|run| run.len() >= 3)
 }

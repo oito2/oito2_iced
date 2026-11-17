@@ -2496,9 +2496,9 @@ dependencies = [
 
 [[package]]
 name = "oito2_foundation"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bee2fb39dd67bd94d15234a7b9d3973f86d9eea4c26685719cec7f994145e96e"
+checksum = "c69cd553f83017359ec174a2cf7cfb04f83ff1a6e7dc1136f7d0405c021de303"
 dependencies = [
  "thiserror 2.0.21",
 ]
@@ -2572,9 +2572,9 @@ dependencies = [
 
 [[package]]
 name = "oito2_settings"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e2815ca920a6fe417e08c4e9c50f6b50c23c6e28fcd42a3507bc0a3e2eb0e72"
+checksum = "af84b631bf73bb278255d5821499b67577e9827986b0d22cdae7256b02851495"
 dependencies = [
  "block2 0.6.2",
  "gio",

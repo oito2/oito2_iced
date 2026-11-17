@@ -5,6 +5,6 @@
 
          | File | Source commit |
 |---|---|
-| `schemes.json` | `dd9ddd876f6070aa308e8cdd7c0f2be80eff0a26` |
+| `schemes.json` | `f5b27a6a4c0854a6b52654f1f0582b7de9771a77` |
 
 Update only by running the sync again, which records the new commit here.

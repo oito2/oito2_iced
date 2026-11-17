@@ -5,11 +5,11 @@
 
          | File | Source commit |
 |---|---|
-| `tokens.json` | `dd9ddd876f6070aa308e8cdd7c0f2be80eff0a26` |
-| `schemes.json` | `dd9ddd876f6070aa308e8cdd7c0f2be80eff0a26` |
-| `foundation.json` | `dd9ddd876f6070aa308e8cdd7c0f2be80eff0a26` |
-| `l10n.json` | `dd9ddd876f6070aa308e8cdd7c0f2be80eff0a26` |
-| `format.json` | `dd9ddd876f6070aa308e8cdd7c0f2be80eff0a26` |
-| `manifest.json` | `dd9ddd876f6070aa308e8cdd7c0f2be80eff0a26` |
+| `tokens.json` | `f5b27a6a4c0854a6b52654f1f0582b7de9771a77` |
+| `schemes.json` | `f5b27a6a4c0854a6b52654f1f0582b7de9771a77` |
+| `foundation.json` | `f5b27a6a4c0854a6b52654f1f0582b7de9771a77` |
+| `l10n.json` | `f5b27a6a4c0854a6b52654f1f0582b7de9771a77` |
+| `format.json` | `f5b27a6a4c0854a6b52654f1f0582b7de9771a77` |
+| `manifest.json` | `f5b27a6a4c0854a6b52654f1f0582b7de9771a77` |
 
 Update only by running the sync again, which records the new commit here.

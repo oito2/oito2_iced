@@ -15,9 +15,12 @@
 
 //! OITO2 widgets.
 
+pub mod angle_slider;
 pub mod autocomplete;
 pub mod button;
+pub mod calendar;
 pub mod chips;
+pub mod color_picker;
 pub mod command_palette;
 pub mod containers;
 pub mod context_menu;
@@ -25,6 +28,7 @@ pub mod controls;
 pub mod copy;
 pub mod dialog;
 pub mod editable_label;
+pub mod entries;
 pub mod expandable;
 mod focusable;
 pub mod helpers;
@@ -40,8 +44,10 @@ pub mod navigation_rail;
 pub mod number_entry;
 pub mod paned_view;
 pub mod password;
+pub mod pin_entry;
 pub mod popover;
 pub mod progress;
+pub mod rating;
 pub(crate) mod resize_handle;
 pub mod scroll_area;
 pub mod search;
@@ -52,6 +58,7 @@ pub mod slider;
 pub mod split_button;
 pub mod splitter;
 pub mod tab_bar;
+pub mod tags_field;
 pub mod text_field;
 pub mod toast;
 pub mod toggle_group;

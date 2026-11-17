@@ -274,3 +274,266 @@ fn slider_light_high_contrast() {
 
     snapshot(&theme, "slider_light_high_contrast");
 }
+
+#[derive(Debug, Clone, PartialEq)]
+enum RangeMessage {
+    Changed(f32, f32),
+    Started(f32, f32),
+    Ended(f32, f32),
+    After,
+}
+
+type RangeSimulator<'a> = simulator::Simulator<'a, RangeMessage, Theme>;
+
+fn price(start: f32, end: f32) -> slider::RangeSlider<'static, RangeMessage> {
+    slider::range_slider(start, end)
+        .range(0.0, 100.0)
+        .divisions(10)
+        .label("Price")
+        .value_text(|value| format!("{value:.0}"))
+        .on_change(RangeMessage::Changed)
+        .id("low")
+        .end_id("high")
+}
+
+fn range_view(
+    slider: slider::RangeSlider<'static, RangeMessage>,
+) -> Element<'static, RangeMessage> {
+    focus::navigation(
+        column![
+            container(slider).width(300),
+            button::filled("After")
+                .on_press(RangeMessage::After)
+                .id("after"),
+        ]
+        .spacing(8)
+        .padding(8),
+    )
+    .into()
+}
+
+/// The track of a range slider whose thumbs (ids `low` and `high`) sit at
+/// the fractions `start` and `end` of the range, found from the bounds the
+/// two thumbs register for focus: the thumb centers are inset by the thumb
+/// radius (10) from the track ends.
+fn range_track(ui: &mut RangeSimulator<'_>, start: f32, end: f32, vertical: bool) -> Rectangle {
+    let low = ui
+        .find(selector::id("low"))
+        .expect("start thumb")
+        .bounds()
+        .center();
+    let high = ui
+        .find(selector::id("high"))
+        .expect("end thumb")
+        .bounds()
+        .center();
+
+    if vertical {
+        let extent = (low.y - high.y) / (end - start);
+        let height = extent + 20.0;
+        let y = low.y - height + 10.0 + extent * start;
+        Rectangle::new(Point::new(low.x - 10.0, y), iced::Size::new(20.0, height))
+    } else {
+        let extent = (high.x - low.x) / (end - start);
+        let x = low.x - 10.0 - extent * start;
+        Rectangle::new(
+            Point::new(x, low.y - 10.0),
+            iced::Size::new(extent + 20.0, 20.0),
+        )
+    }
+}
+
+fn focused_id(ui: &mut RangeSimulator<'_>) -> Option<iced::widget::Id> {
+    match ui.find(selector::is_focused()).ok()? {
+        iced_test::selector::Target::Focusable { id, .. } => id,
+        _ => None,
+    }
+}
+
+#[test]
+fn a_range_shows_its_ends_and_lines_its_track_up_with_the_marks() {
+    let slider = price(20.0, 70.0).marks(marks());
+    let mut ui = RangeSimulator::with_settings(support::settings(), range_view(slider));
+    let track = range_track(&mut ui, 0.2, 0.7, false);
+    let center = |ui: &mut RangeSimulator<'_>, label: &'static str| {
+        ui.find(label).expect("mark label").bounds().center()
+    };
+
+    ui.find("Price").expect("label");
+    ui.find("20 – 70").expect("range text");
+    assert!((center(&mut ui, "0%").x - (track.x + 10.0)).abs() <= 0.5);
+    assert!((center(&mut ui, "100%").x - (track.x + track.width - 10.0)).abs() <= 0.5);
+}
+
+#[test]
+fn each_thumb_is_a_tab_stop_and_takes_the_keys() {
+    let mut ui = RangeSimulator::with_settings(support::settings(), range_view(price(20.0, 70.0)));
+
+    ui.tap_key(Named::Tab);
+    assert_eq!(focused_id(&mut ui), Some(iced::widget::Id::new("low")));
+    ui.tap_key(Named::ArrowRight);
+    ui.tap_key(Named::End);
+
+    ui.tap_key(Named::Tab);
+    assert_eq!(focused_id(&mut ui), Some(iced::widget::Id::new("high")));
+    ui.tap_key(Named::ArrowDown);
+    ui.tap_key(Named::Home);
+    ui.tap_key(Named::End);
+
+    ui.tap_key(Named::Tab);
+    assert_eq!(focused_id(&mut ui), Some(iced::widget::Id::new("after")));
+
+    assert_eq!(
+        messages_of(ui),
+        vec![
+            RangeMessage::Changed(30.0, 70.0),
+            RangeMessage::Changed(70.0, 70.0),
+            RangeMessage::Changed(20.0, 60.0),
+            RangeMessage::Changed(20.0, 20.0),
+            RangeMessage::Changed(20.0, 100.0),
+        ]
+    );
+}
+
+fn messages_of(ui: RangeSimulator<'_>) -> Vec<RangeMessage> {
+    ui.into_messages().collect()
+}
+
+#[test]
+fn a_click_moves_the_nearest_thumb_and_a_drag_stops_at_the_other() {
+    let slider = price(20.0, 70.0)
+        .on_change_start(RangeMessage::Started)
+        .on_change_end(RangeMessage::Ended);
+    let mut ui = RangeSimulator::with_settings(support::settings(), range_view(slider));
+    let track = range_track(&mut ui, 0.2, 0.7, false);
+    let at = |t: f32| Point::new(track.x + 10.0 + (track.width - 20.0) * t, track.center_y());
+
+    ui.point_at(at(0.9));
+    ui.simulate(simulator::click());
+
+    ui.point_at(at(0.2));
+    ui.simulate([iced::Event::Mouse(mouse::Event::ButtonPressed(
+        mouse::Button::Left,
+    ))]);
+    for t in [0.5, 0.9] {
+        ui.point_at(at(t));
+        ui.simulate([iced::Event::Mouse(mouse::Event::CursorMoved {
+            position: at(t),
+        })]);
+    }
+    ui.simulate([iced::Event::Mouse(mouse::Event::ButtonReleased(
+        mouse::Button::Left,
+    ))]);
+
+    assert_eq!(
+        messages_of(ui),
+        vec![
+            RangeMessage::Started(20.0, 70.0),
+            RangeMessage::Changed(20.0, 90.0),
+            RangeMessage::Ended(20.0, 90.0),
+            RangeMessage::Started(20.0, 70.0),
+            RangeMessage::Changed(50.0, 70.0),
+            RangeMessage::Changed(70.0, 70.0),
+            RangeMessage::Ended(70.0, 70.0),
+        ]
+    );
+}
+
+#[test]
+fn a_disabled_range_slider_ignores_input_and_is_skipped() {
+    let disabled = slider::range_slider(20.0, 70.0)
+        .range(0.0, 100.0)
+        .label("Price");
+    let mut ui = RangeSimulator::with_settings(support::settings(), range_view(disabled));
+    let label = ui.find("Price").expect("label").bounds();
+
+    ui.point_at(Point::new(label.x + 150.0, label.y + label.height + 14.0));
+    ui.simulate(simulator::click());
+    ui.tap_key(Named::Tab);
+
+    assert_eq!(focused_id(&mut ui), Some(iced::widget::Id::new("after")));
+    assert!(messages_of(ui).is_empty());
+}
+
+#[test]
+fn a_vertical_range_slider_moves_its_top_thumb_from_above() {
+    let slider = slider::range_slider(20.0, 60.0)
+        .range(0.0, 100.0)
+        .vertical(true)
+        .length(200.0)
+        .on_change(RangeMessage::Changed)
+        .id("low")
+        .end_id("high");
+    let mut ui = RangeSimulator::with_settings(support::settings(), range_view(slider));
+    let track = range_track(&mut ui, 0.2, 0.6, true);
+
+    assert_eq!(track.height, 200.0);
+    ui.point_at(Point::new(track.center_x(), track.y + 12.0));
+    ui.simulate(simulator::click());
+
+    let messages = messages_of(ui);
+    assert!(
+        matches!(messages.as_slice(), [RangeMessage::Changed(start, end)] if *start == 20.0 && *end > 95.0),
+        "{messages:?}"
+    );
+}
+
+fn range_catalog() -> Element<'static, RangeMessage> {
+    row![
+        column![
+            price(20.0, 70.0).marks(marks()),
+            slider::range_slider(0.2, 0.4).on_change(RangeMessage::Changed),
+            slider::range_slider(0.3, 0.8).label("Disabled"),
+        ]
+        .spacing(16)
+        .width(320),
+        slider::range_slider(30.0, 80.0)
+            .range(0.0, 100.0)
+            .vertical(true)
+            .length(160.0)
+            .marks(marks())
+            .on_change(RangeMessage::Changed),
+    ]
+    .spacing(32)
+    .padding(16)
+    .into()
+}
+
+fn range_snapshot(theme: &Theme, name: &str) {
+    let mut ui = RangeSimulator::with_size(support::settings(), (480.0, 220.0), range_catalog());
+    let snapshot = ui.snapshot(theme).expect("snapshot");
+
+    support::golden!(&snapshot, name);
+}
+
+#[test]
+fn range_slider_light() {
+    range_snapshot(&Theme::light(), "range_slider_light");
+}
+
+#[test]
+fn range_slider_dark() {
+    range_snapshot(&Theme::dark(), "range_slider_dark");
+}
+
+#[test]
+fn range_slider_light_high_contrast() {
+    let theme = Theme::base(Brightness::Light, Accent::default().color(), Contrast::High);
+
+    range_snapshot(&theme, "range_slider_light_high_contrast");
+}
+
+#[test]
+fn range_slider_focused_end() {
+    let mut ui = RangeSimulator::with_size(
+        support::settings(),
+        (320.0, 120.0),
+        range_view(price(30.0, 60.0)),
+    );
+
+    ui.tap_key(Named::Tab);
+    ui.tap_key(Named::Tab);
+    let snapshot = ui.snapshot(&Theme::light()).expect("snapshot");
+
+    support::golden!(&snapshot, "range_slider_focused_end");
+}

@@ -415,3 +415,127 @@ fn a_selected_radio_row_still_shows_the_hand_cursor() {
         assert_eq!(interaction, iced::mouse::Interaction::Pointer, "{id}");
     }
 }
+
+const YELLOW: iced::Color = iced::Color::from_rgb8(0xF8, 0xE4, 0x5C);
+const DISK_BLUE: iced::Color = iced::Color::from_rgb8(0x1A, 0x5F, 0xB4);
+
+#[test]
+fn a_color_disk_rings_itself_in_a_contrasting_shade_of_its_color() {
+    use oito2_iced::theme::contrast;
+
+    let surface = Theme::light().roles().surface;
+    let ring = controls::color_disk_ring(YELLOW, surface);
+
+    // Light yellow on a light surface is darkened to stand out, keeping its
+    // hue; a contrasting blue stays as it is.
+    assert!(contrast::ratio(ring, surface) >= contrast::NON_TEXT_AA);
+    let hue = |color: iced::Color| {
+        let [r, g, b, _] = color.into_rgba8();
+        let (r, g, b) = (f32::from(r), f32::from(g), f32::from(b));
+        let (max, min) = (r.max(g).max(b), r.min(g).min(b));
+        // Red is the largest channel of both yellows.
+        60.0 * ((g - b) / (max - min))
+    };
+    assert!((hue(ring) - hue(YELLOW)).abs() < 1.0);
+    assert_eq!(controls::color_disk_ring(DISK_BLUE, surface), DISK_BLUE);
+
+    assert!(controls::color_disk_blends(iced::Color::WHITE, surface));
+    assert!(!controls::color_disk_blends(DISK_BLUE, surface));
+}
+
+#[test]
+fn a_color_disk_is_a_focus_stop_pressed_by_click_and_keys() {
+    let mut ui = ui(row![
+        controls::color_disk(YELLOW, "Yellow")
+            .selected(true)
+            .on_press(Message::Add)
+            .id("yellow"),
+        controls::color_disk(DISK_BLUE, "Blue").id("blue"),
+        controls::color_disk(DISK_BLUE, "Blue")
+            .on_press(Message::Open)
+            .id("open"),
+    ]);
+
+    let yellow = bounds(&mut ui, "yellow");
+    assert_eq!(yellow.size(), iced::Size::new(28.0, 28.0));
+
+    click_at(&mut ui, yellow.center());
+    let blue = bounds(&mut ui, "blue");
+    click_at(&mut ui, blue.center());
+
+    ui.tap_key(Named::Tab);
+    assert_eq!(focused(&mut ui), Some(yellow));
+    ui.tap_key(Named::Tab);
+    assert_eq!(
+        focused(&mut ui),
+        Some(bounds(&mut ui, "open")),
+        "the disabled disk is skipped"
+    );
+    ui.tap_key(Named::Space);
+    ui.tap_key(Named::Enter);
+
+    assert_eq!(
+        ui.into_messages().collect::<Vec<_>>(),
+        vec![Message::Add, Message::Open, Message::Open]
+    );
+}
+
+fn color_disks() -> Element<'static, Message> {
+    let colors = [
+        iced::Color::WHITE,
+        YELLOW,
+        DISK_BLUE,
+        iced::Color::from_rgb8(0x24, 0x1F, 0x31),
+        iced::Color::from_rgba8(0xE0, 0x1B, 0x24, 0.5),
+    ];
+    let disks = |selected: bool| {
+        row(colors.map(|color| {
+            controls::color_disk(color, "Color")
+                .selected(selected)
+                .on_press(Message::Add)
+                .into()
+        }))
+        .spacing(4)
+    };
+
+    column![
+        disks(false),
+        disks(true),
+        controls::color_disk(DISK_BLUE, "Large")
+            .size(32.0)
+            .selected(true)
+            .on_press(Message::Add),
+    ]
+    .spacing(8)
+    .padding(8)
+    .into()
+}
+
+fn disk_snapshot(theme: &Theme, name: &str) {
+    let mut ui = simulator::Simulator::with_size(
+        support::settings(),
+        (180.0, 130.0),
+        oito2_iced::focus::navigation(color_disks()),
+    );
+    ui.tap_key(Named::Tab);
+    let snapshot = ui.snapshot(theme).expect("snapshot");
+
+    support::golden!(&snapshot, name);
+}
+
+#[test]
+fn color_disk_light() {
+    disk_snapshot(&Theme::light(), "color_disk_light");
+}
+
+#[test]
+fn color_disk_dark() {
+    disk_snapshot(&Theme::dark(), "color_disk_dark");
+}
+
+#[test]
+fn color_disk_light_high_contrast() {
+    let theme = Theme::base(Brightness::Light, Accent::default().color(), Contrast::High);
+
+    disk_snapshot(&theme, "color_disk_light_high_contrast");
+}

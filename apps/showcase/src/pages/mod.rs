@@ -24,17 +24,21 @@ mod icons;
 mod layout;
 mod navigation;
 mod overlays;
+mod pickers;
 mod progress;
 mod toggles;
 
 use std::fmt;
 
 use oito2_iced::collections::ListCollection;
+use oito2_iced::date::{Date, Time};
+use oito2_iced::widget::calendar::DateRange;
+use oito2_iced::widget::entries::Part;
 use oito2_iced::widget::splitter;
 
 use iced::font::Weight;
 use iced::widget::{column, container, text};
-use iced::{Element, Length};
+use iced::{Color, Element, Length};
 
 use oito2_iced::l10n::Localizations;
 use oito2_iced::theme::container::Class as ContainerClass;
@@ -64,6 +68,8 @@ pub enum Page {
     Navigation,
     /// Menus, popovers, hover cards, autocomplete, sheets, dialogs and toasts.
     Overlays,
+    /// Rating, range and angle sliders, codes, tags, dates, times and colors.
+    Pickers,
     /// Progress indicators.
     Progress,
     /// Icons.
@@ -72,7 +78,7 @@ pub enum Page {
 
 impl Page {
     /// Every page, in the order of the sidebar.
-    pub const ALL: [Page; 11] = [
+    pub const ALL: [Page; 12] = [
         Page::Overview,
         Page::Buttons,
         Page::Toggles,
@@ -82,6 +88,7 @@ impl Page {
         Page::Layout,
         Page::Navigation,
         Page::Overlays,
+        Page::Pickers,
         Page::Progress,
         Page::Icons,
     ];
@@ -99,6 +106,7 @@ impl fmt::Display for Page {
             Page::Layout => "Layout",
             Page::Navigation => "Navigation",
             Page::Overlays => "Overlays",
+            Page::Pickers => "Pickers",
             Page::Progress => "Progress",
             Page::Icons => "Icons",
         })
@@ -163,6 +171,25 @@ pub struct Gallery {
     popover_open: bool,
     cities: Option<ListCollection<String>>,
     city: String,
+    today: Date,
+    rating: f32,
+    price_range: (f32, f32),
+    angle: f32,
+    pin: String,
+    tags: Vec<String>,
+    address: Vec<String>,
+    date: Option<Date>,
+    date_open: bool,
+    time: Option<Time>,
+    time_open: bool,
+    date_time: Option<(Date, Time)>,
+    date_time_open: Option<Part>,
+    trip: Option<DateRange>,
+    trip_open: bool,
+    day: Option<Date>,
+    disk: usize,
+    color: Color,
+    color_open: bool,
 }
 
 impl Default for Gallery {
@@ -220,6 +247,25 @@ impl Default for Gallery {
                 "São Paulo",
             ]),
             city: String::new(),
+            today: today(),
+            rating: 3.5,
+            price_range: (20.0, 70.0),
+            angle: 135.0,
+            pin: String::new(),
+            tags: vec!["iced".to_owned(), "rust".to_owned()],
+            address: ["192", "168", "0", "1"].map(str::to_owned).to_vec(),
+            date: None,
+            date_open: false,
+            time: Time::new(9, 30),
+            time_open: false,
+            date_time: None,
+            date_time_open: None,
+            trip: None,
+            trip_open: false,
+            day: None,
+            disk: 0,
+            color: pickers::DISKS[0].1,
+            color_open: false,
         }
     }
 }
@@ -319,6 +365,57 @@ pub enum Message {
     ShowToast,
     /// The command palette should open.
     OpenPalette,
+    /// The rating changed.
+    Rating(f32),
+    /// The price range changed.
+    PriceRange(f32, f32),
+    /// The angle changed.
+    Angle(f32),
+    /// The PIN changed.
+    Pin(String),
+    /// The tags changed.
+    Tags(Vec<String>),
+    /// The address segments changed.
+    Address(Vec<String>),
+    /// The date entry changed.
+    Date(Option<Date>),
+    /// The calendar of the date entry opened or closed.
+    DateOpen(bool),
+    /// The time entry changed.
+    Time(Option<Time>),
+    /// The time popover opened or closed.
+    TimeOpen(bool),
+    /// The date and time entry changed.
+    DateTime(Option<(Date, Time)>),
+    /// A picker of the date and time entry opened, or both closed.
+    DateTimeOpen(Option<Part>),
+    /// The trip range was picked.
+    Trip(DateRange),
+    /// The trip picker opened or closed.
+    TripOpen(bool),
+    /// A day of the calendar was picked.
+    Day(Date),
+    /// A color disk was pressed.
+    Disk(usize),
+    /// The color changed.
+    Color(Color),
+    /// The color picker button opened or closed.
+    ColorOpen(bool),
+}
+
+/// Today's date in UTC, or 2026-01-01 when the clock is before 1970.
+fn today() -> Date {
+    let days = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs() / 86_400)
+        .unwrap_or_default();
+
+    i64::try_from(days)
+        .ok()
+        .filter(|days| *days > 0)
+        .and_then(Date::from_unix_days)
+        .or_else(|| Date::new(2026, 1, 1))
+        .unwrap_or(Date::MIN)
 }
 
 /// A collection of the `labels`, valued by themselves; `None` when two
@@ -390,6 +487,29 @@ impl Gallery {
             Message::ContextOpen(open) => self.context_open = open,
             Message::PopoverOpen(open) => self.popover_open = open,
             Message::City(city) => self.city = city,
+            Message::Rating(value) => self.rating = value,
+            Message::PriceRange(start, end) => self.price_range = (start, end),
+            Message::Angle(angle) => self.angle = angle,
+            Message::Pin(pin) => self.pin = pin,
+            Message::Tags(tags) => self.tags = tags,
+            Message::Address(address) => self.address = address,
+            Message::Date(date) => self.date = date,
+            Message::DateOpen(open) => self.date_open = open,
+            Message::Time(time) => self.time = time,
+            Message::TimeOpen(open) => self.time_open = open,
+            Message::DateTime(value) => self.date_time = value,
+            Message::DateTimeOpen(part) => self.date_time_open = part,
+            Message::Trip(range) => self.trip = Some(range),
+            Message::TripOpen(open) => self.trip_open = open,
+            Message::Day(day) => self.day = Some(day),
+            Message::Disk(index) => {
+                self.disk = index;
+                if let Some((_, color)) = pickers::DISKS.get(index) {
+                    self.color = *color;
+                }
+            }
+            Message::Color(color) => self.color = color,
+            Message::ColorOpen(open) => self.color_open = open,
             Message::OpenSheet(_)
             | Message::OpenDialog
             | Message::ShowToast
@@ -414,6 +534,7 @@ impl Gallery {
             Page::Layout => Some(layout::view(self)),
             Page::Navigation => Some(navigation::view(self, localizations)),
             Page::Overlays => Some(overlays::view(self)),
+            Page::Pickers => Some(pickers::view(self, localizations)),
             Page::Progress => Some(progress::view(self)),
             Page::Icons => Some(icons::view()),
         }

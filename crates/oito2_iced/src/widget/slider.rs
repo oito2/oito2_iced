@@ -30,6 +30,11 @@
 //! publishes new values through [`Slider::on_change`]; without it the
 //! slider is disabled.
 //!
+//! A [`range_slider`] picks a range with two thumbs drawn the same way:
+//! each is a stop in the Tab order and takes the same keys, a click or a
+//! drag moves the thumb nearest to the pointer, and neither passes the
+//! other. Its value text shows the range as "start – end".
+//!
 //! ```no_run
 //! use oito2_iced::widget::slider;
 //!
@@ -46,6 +51,25 @@
 //!     .value_text(|value| format!("{value:.0}%"))
 //!     .marks([slider::mark(0.0).label("0%"), slider::mark(100.0).label("100%")])
 //!     .on_change(Message::Volume)
+//!     .into()
+//! # }
+//! ```
+//!
+//! ```no_run
+//! use oito2_iced::widget::slider;
+//!
+//! #[derive(Debug, Clone)]
+//! enum Message {
+//!     Price(f32, f32),
+//! }
+//!
+//! # fn view<'a>(low: f32, high: f32) -> oito2_iced::Element<'a, Message> {
+//! slider::range_slider(low, high)
+//!     .range(0.0, 500.0)
+//!     .divisions(50)
+//!     .label("Price")
+//!     .value_text(|value| format!("${value:.0}"))
+//!     .on_change(Message::Price)
 //!     .into()
 //! # }
 //! ```
@@ -103,7 +127,8 @@ const CONTINUOUS_STEP: f32 = 0.05;
 /// The part of the range Page Up and Page Down move the value.
 const PAGE_STEP: f32 = 0.1;
 
-/// A labeled point on the track of a [`Slider`]. Built by [`mark`].
+/// A labeled point on the track of a [`Slider`] or a [`RangeSlider`].
+/// Built by [`mark`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mark<'a> {
     value: f32,
@@ -267,12 +292,183 @@ impl<'a, Message> Slider<'a, Message> {
     }
 }
 
+/// A slider for a range between two values. See [`range_slider`].
+pub struct RangeSlider<'a, Message> {
+    start: f32,
+    end: f32,
+    min: f32,
+    max: f32,
+    divisions: Option<u32>,
+    on_change: Option<Box<dyn Fn(f32, f32) -> Message + 'a>>,
+    on_change_start: Option<Box<dyn Fn(f32, f32) -> Message + 'a>>,
+    on_change_end: Option<Box<dyn Fn(f32, f32) -> Message + 'a>>,
+    label: Option<Cow<'a, str>>,
+    value_text: Option<Box<dyn Fn(f32) -> String + 'a>>,
+    show_value_indicator: bool,
+    marks: Vec<Mark<'a>>,
+    vertical: bool,
+    length: f32,
+    id: Option<Id>,
+    end_id: Option<Id>,
+}
+
+/// A slider for the range from `start` to `end`, between 0 and 1 unless
+/// [`RangeSlider::range`] says otherwise. Without
+/// [`RangeSlider::on_change`] the slider is disabled.
+///
+/// Each end has its own thumb and its own stop in the Tab order, the start
+/// first. A click or a drag moves the thumb nearest to the pointer, and a
+/// thumb never passes the other one.
+pub fn range_slider<'a, Message>(start: f32, end: f32) -> RangeSlider<'a, Message> {
+    RangeSlider {
+        start,
+        end,
+        min: 0.0,
+        max: 1.0,
+        divisions: None,
+        on_change: None,
+        on_change_start: None,
+        on_change_end: None,
+        label: None,
+        value_text: None,
+        show_value_indicator: false,
+        marks: Vec::new(),
+        vertical: false,
+        length: VERTICAL_LENGTH,
+        id: None,
+        end_id: None,
+    }
+}
+
+impl<'a, Message> RangeSlider<'a, Message> {
+    /// Sets the smallest and the largest value.
+    #[must_use]
+    pub fn range(mut self, min: f32, max: f32) -> Self {
+        self.min = min;
+        self.max = max;
+        self
+    }
+
+    /// Splits the range into `divisions` equal steps; both ends snap to
+    /// them. A slider without divisions is continuous.
+    #[must_use]
+    pub fn divisions(mut self, divisions: u32) -> Self {
+        self.divisions = (divisions > 0).then_some(divisions);
+        self
+    }
+
+    /// Sets the function that turns a new range, as its start and end, into
+    /// a message, called while the range changes.
+    #[must_use]
+    pub fn on_change(mut self, on_change: impl Fn(f32, f32) -> Message + 'a) -> Self {
+        self.on_change = Some(Box::new(on_change));
+        self
+    }
+
+    /// Sets the change function, or disables the slider with `None`.
+    #[must_use]
+    pub fn on_change_maybe(mut self, on_change: Option<impl Fn(f32, f32) -> Message + 'a>) -> Self {
+        self.on_change = on_change.map(|f| Box::new(f) as Box<dyn Fn(f32, f32) -> Message + 'a>);
+        self
+    }
+
+    /// Sets the function called with the range when a change starts: a
+    /// press on the track or a key press.
+    #[must_use]
+    pub fn on_change_start(mut self, on_change_start: impl Fn(f32, f32) -> Message + 'a) -> Self {
+        self.on_change_start = Some(Box::new(on_change_start));
+        self
+    }
+
+    /// Sets the function called with the range when a change ends: the
+    /// release of a drag or a key press.
+    #[must_use]
+    pub fn on_change_end(mut self, on_change_end: impl Fn(f32, f32) -> Message + 'a) -> Self {
+        self.on_change_end = Some(Box::new(on_change_end));
+        self
+    }
+
+    /// Shows `label` above the track.
+    #[must_use]
+    pub fn label(mut self, label: impl IntoFragment<'a>) -> Self {
+        self.label = Some(label.into_fragment());
+        self
+    }
+
+    /// Formats a value; the range shows above the track as "start – end"
+    /// and, with [`RangeSlider::show_value_indicator`], each end shows
+    /// above its thumb while it is dragged.
+    #[must_use]
+    pub fn value_text(mut self, format: impl Fn(f32) -> String + 'a) -> Self {
+        self.value_text = Some(Box::new(format));
+        self
+    }
+
+    /// Sets whether the formatted value shows above a thumb while it is
+    /// dragged (false by default).
+    #[must_use]
+    pub fn show_value_indicator(mut self, show: bool) -> Self {
+        self.show_value_indicator = show;
+        self
+    }
+
+    /// Sets the labeled points along the track.
+    #[must_use]
+    pub fn marks(mut self, marks: impl IntoIterator<Item = Mark<'a>>) -> Self {
+        self.marks = marks.into_iter().collect();
+        self
+    }
+
+    /// Runs the track up instead of across, with the minimum at the
+    /// bottom.
+    #[must_use]
+    pub fn vertical(mut self, vertical: bool) -> Self {
+        self.vertical = vertical;
+        self
+    }
+
+    /// Sets the height of a vertical slider ([`VERTICAL_LENGTH`] by
+    /// default).
+    #[must_use]
+    pub fn length(mut self, length: f32) -> Self {
+        self.length = length;
+        self
+    }
+
+    /// Sets the widget [`Id`] of the start thumb, used to focus it
+    /// programmatically and to find the track in tests.
+    #[must_use]
+    pub fn id(mut self, id: impl Into<Id>) -> Self {
+        self.id = Some(id.into());
+        self
+    }
+
+    /// Sets the widget [`Id`] of the end thumb.
+    #[must_use]
+    pub fn end_id(mut self, id: impl Into<Id>) -> Self {
+        self.end_id = Some(id.into());
+        self
+    }
+}
+
 /// The position of `value` along the range, from 0 to 1.
 fn fraction(value: f32, min: f32, max: f32) -> f32 {
     if max <= min {
         0.0
     } else {
         ((value - min) / (max - min)).clamp(0.0, 1.0)
+    }
+}
+
+/// The value at the position `t` along the range from `min` to `max`; with
+/// divisions, the value of the nearest division.
+fn value_at(min: f32, max: f32, divisions: Option<u32>, t: f32) -> f32 {
+    match divisions {
+        Some(divisions) => {
+            let divisions = divisions as f32;
+            min + (max - min) * (t * divisions).round() / divisions
+        }
+        None => min + (max - min) * t,
     }
 }
 
@@ -345,53 +541,141 @@ where
             id: slider.id,
         });
 
-        let body: Element<'a, Message> = if slider.marks.is_empty() {
-            track
-        } else {
-            let marks: Element<'a, Message> = IcedElement::new(Marks::new(
-                slider.marks,
-                slider.value,
-                slider.min,
-                slider.max,
-                slider.vertical,
-                slider.length,
-            ));
+        assemble(
+            track,
+            Parts {
+                marks: slider.marks,
+                reached: (f32::NEG_INFINITY, slider.value),
+                min: slider.min,
+                max: slider.max,
+                label: slider.label,
+                value_text,
+                vertical: slider.vertical,
+                length: slider.length,
+            },
+        )
+    }
+}
 
-            if slider.vertical {
-                row![track, marks].spacing(spacing::XS).into()
-            } else {
-                column![track, marks].spacing(spacing::XS).into()
-            }
+impl<'a, Message> From<RangeSlider<'a, Message>> for Element<'a, Message>
+where
+    Message: Clone + 'a,
+{
+    fn from(slider: RangeSlider<'a, Message>) -> Self {
+        let (start, end) = ordered(slider.start, slider.end);
+        let texts = slider
+            .value_text
+            .as_ref()
+            .map(|format| [format(start), format(end)]);
+        let value_text = texts
+            .as_ref()
+            .map(|[start, end]| format!("{start} – {end}"));
+        let indicators = if slider.show_value_indicator {
+            texts
+        } else {
+            None
         };
 
-        if slider.label.is_none() && value_text.is_none() {
-            return body;
-        }
+        let track: Element<'a, Message> = IcedElement::new(RangeTrack {
+            values: [start, end],
+            min: slider.min,
+            max: slider.max,
+            divisions: slider.divisions,
+            on_change: slider.on_change,
+            on_change_start: slider.on_change_start,
+            on_change_end: slider.on_change_end,
+            indicators,
+            vertical: slider.vertical,
+            length: slider.length,
+            ids: [slider.id, slider.end_id],
+        });
 
-        let mut header = row![].spacing(spacing::SM).align_y(Alignment::Center);
+        assemble(
+            track,
+            Parts {
+                marks: slider.marks,
+                reached: (start, end),
+                min: slider.min,
+                max: slider.max,
+                label: slider.label,
+                value_text,
+                vertical: slider.vertical,
+                length: slider.length,
+            },
+        )
+    }
+}
 
-        if let Some(label) = slider.label {
-            let label = styled_text(label, ITEM_TEXT);
-            header = if slider.vertical {
-                header.push(label)
-            } else {
-                header.push(label.width(Length::Fill))
-            };
-        }
+/// `a` and `b` in ascending order.
+fn ordered(a: f32, b: f32) -> (f32, f32) {
+    if b < a { (b, a) } else { (a, b) }
+}
 
-        if let Some(value) = value_text {
-            header = header.push(styled_text(value, ITEM_TEXT));
-        }
+/// The parts around the track of a slider: the header and the marks.
+struct Parts<'a> {
+    marks: Vec<Mark<'a>>,
+    /// The values from which to which a mark counts as reached.
+    reached: (f32, f32),
+    min: f32,
+    max: f32,
+    label: Option<Cow<'a, str>>,
+    value_text: Option<String>,
+    vertical: bool,
+    length: f32,
+}
 
-        let content = column![header, body].spacing(spacing::XS);
+/// Places `track` under the label and the value text of `parts`, with the
+/// marks of `parts` under it (beside it on a vertical slider).
+fn assemble<'a, Message: 'a>(
+    track: Element<'a, Message>,
+    parts: Parts<'a>,
+) -> Element<'a, Message> {
+    let body: Element<'a, Message> = if parts.marks.is_empty() {
+        track
+    } else {
+        let marks: Element<'a, Message> = IcedElement::new(Marks::new(
+            parts.marks,
+            parts.reached,
+            parts.min,
+            parts.max,
+            parts.vertical,
+            parts.length,
+        ));
 
-        if slider.vertical {
-            content.into()
+        if parts.vertical {
+            row![track, marks].spacing(spacing::XS).into()
         } else {
-            container(content.width(Length::Fill))
-                .width(Length::Fill)
-                .into()
+            column![track, marks].spacing(spacing::XS).into()
         }
+    };
+
+    if parts.label.is_none() && parts.value_text.is_none() {
+        return body;
+    }
+
+    let mut header = row![].spacing(spacing::SM).align_y(Alignment::Center);
+
+    if let Some(label) = parts.label {
+        let label = styled_text(label, ITEM_TEXT);
+        header = if parts.vertical {
+            header.push(label)
+        } else {
+            header.push(label.width(Length::Fill))
+        };
+    }
+
+    if let Some(value) = parts.value_text {
+        header = header.push(styled_text(value, ITEM_TEXT));
+    }
+
+    let content = column![header, body].spacing(spacing::XS);
+
+    if parts.vertical {
+        content.into()
+    } else {
+        container(content.width(Length::Fill))
+            .width(Length::Fill)
+            .into()
     }
 }
 
@@ -444,40 +728,12 @@ impl<Message> Track<'_, Message> {
     /// The value at the position `t` along the range; on a slider with
     /// divisions, the value of the nearest division.
     fn value_at(&self, t: f32) -> f32 {
-        match self.divisions {
-            Some(divisions) => {
-                let divisions = divisions as f32;
-                self.min + (self.max - self.min) * (t * divisions).round() / divisions
-            }
-            None => self.min + (self.max - self.min) * t,
-        }
+        value_at(self.min, self.max, self.divisions, t)
     }
 
     /// The position along the range of the point `position` on the track.
     fn locate(&self, bounds: Rectangle, position: Point) -> f32 {
-        let t = if self.vertical {
-            let extent = bounds.height - 2.0 * THUMB_RADIUS;
-            (bounds.y + bounds.height - THUMB_RADIUS - position.y) / extent
-        } else {
-            let extent = bounds.width - 2.0 * THUMB_RADIUS;
-            (position.x - bounds.x - THUMB_RADIUS) / extent
-        };
-
-        discretize(t.clamp(0.0, 1.0), self.divisions)
-    }
-
-    /// The center of the thumb at the position `t`.
-    fn thumb_center(&self, bounds: Rectangle, t: f32) -> Point {
-        if self.vertical {
-            let extent = bounds.height - 2.0 * THUMB_RADIUS;
-            Point::new(
-                bounds.center_x(),
-                bounds.y + bounds.height - THUMB_RADIUS - extent * t,
-            )
-        } else {
-            let extent = bounds.width - 2.0 * THUMB_RADIUS;
-            Point::new(bounds.x + THUMB_RADIUS + extent * t, bounds.center_y())
-        }
+        discretize(locate(bounds, self.vertical, position), self.divisions)
     }
 
     /// Publishes a change to `value`, between the start and end messages
@@ -495,23 +751,155 @@ impl<Message> Track<'_, Message> {
             shell.publish(end(value));
         }
     }
+}
 
-    /// The key that changes the value, if `key` is one.
-    fn step_of(&self, key: &keyboard::Key) -> Option<Step> {
-        let keyboard::Key::Named(named) = key else {
-            return None;
-        };
+/// The position along the range, from 0 to 1, of the point `position` on a
+/// track with `bounds`.
+fn locate(bounds: Rectangle, vertical: bool, position: Point) -> f32 {
+    let t = if vertical {
+        let extent = bounds.height - 2.0 * THUMB_RADIUS;
+        (bounds.y + bounds.height - THUMB_RADIUS - position.y) / extent
+    } else {
+        let extent = bounds.width - 2.0 * THUMB_RADIUS;
+        (position.x - bounds.x - THUMB_RADIUS) / extent
+    };
 
-        Some(match named {
-            key::Named::ArrowUp | key::Named::ArrowRight => Step::Increase,
-            key::Named::ArrowDown | key::Named::ArrowLeft => Step::Decrease,
-            key::Named::PageUp => Step::PageUp,
-            key::Named::PageDown => Step::PageDown,
-            key::Named::Home => Step::Home,
-            key::Named::End => Step::End,
-            _ => return None,
-        })
+    t.clamp(0.0, 1.0)
+}
+
+/// The center of the thumb at the position `t` on a track with `bounds`.
+fn thumb_center(bounds: Rectangle, vertical: bool, t: f32) -> Point {
+    if vertical {
+        let extent = bounds.height - 2.0 * THUMB_RADIUS;
+        Point::new(
+            bounds.center_x(),
+            bounds.y + bounds.height - THUMB_RADIUS - extent * t,
+        )
+    } else {
+        let extent = bounds.width - 2.0 * THUMB_RADIUS;
+        Point::new(bounds.x + THUMB_RADIUS + extent * t, bounds.center_y())
     }
+}
+
+/// The key that changes the value, if `key` is one.
+fn step_of(key: &keyboard::Key) -> Option<Step> {
+    let keyboard::Key::Named(named) = key else {
+        return None;
+    };
+
+    Some(match named {
+        key::Named::ArrowUp | key::Named::ArrowRight => Step::Increase,
+        key::Named::ArrowDown | key::Named::ArrowLeft => Step::Decrease,
+        key::Named::PageUp => Step::PageUp,
+        key::Named::PageDown => Step::PageDown,
+        key::Named::Home => Step::Home,
+        key::Named::End => Step::End,
+        _ => return None,
+    })
+}
+
+/// The colors of a track: the active part, the inactive part and the ring
+/// of the thumbs.
+fn track_colors(theme: &Theme, enabled: bool) -> (Color, Color, Color) {
+    let roles = theme.roles();
+    let indicator = roles.indicator();
+
+    if enabled {
+        (indicator, roles.surface_container_highest, indicator)
+    } else {
+        (
+            roles.on_surface.scale_alpha(DISABLED_CONTENT_OPACITY),
+            roles.on_surface.scale_alpha(0.12),
+            blend(
+                roles.surface,
+                roles.on_surface.scale_alpha(DISABLED_CONTENT_OPACITY),
+            ),
+        )
+    }
+}
+
+/// Draws a rounded bar of `thickness` along the track from `from` to `to`.
+fn draw_bar(
+    renderer: &mut iced::Renderer,
+    vertical: bool,
+    from: Point,
+    to: Point,
+    thickness: f32,
+    color: Color,
+) {
+    use iced::advanced::Renderer as _;
+
+    let (x0, x1) = (from.x.min(to.x), from.x.max(to.x));
+    let (y0, y1) = (from.y.min(to.y), from.y.max(to.y));
+
+    let bounds = if vertical {
+        Rectangle::new(
+            Point::new(x0 - thickness / 2.0, y0),
+            Size::new(thickness, y1 - y0),
+        )
+    } else {
+        Rectangle::new(
+            Point::new(x0, y0 - thickness / 2.0),
+            Size::new(x1 - x0, thickness),
+        )
+    };
+
+    renderer.fill_quad(
+        renderer::Quad {
+            bounds,
+            border: Border::default().rounded(thickness / 2.0),
+            ..renderer::Quad::default()
+        },
+        color,
+    );
+}
+
+/// Draws the thumb centered at `center` with a `ring` of that color, and
+/// the halo around it when `halo`.
+fn draw_thumb(
+    renderer: &mut iced::Renderer,
+    theme: &Theme,
+    center: Point,
+    ring: Color,
+    halo: bool,
+) {
+    use iced::advanced::Renderer as _;
+
+    let roles = theme.roles();
+    let circle = |radius: f32| Rectangle {
+        x: center.x - radius,
+        y: center.y - radius,
+        width: 2.0 * radius,
+        height: 2.0 * radius,
+    };
+
+    if halo {
+        renderer.fill_quad(
+            renderer::Quad {
+                bounds: circle(HALO_RADIUS),
+                border: Border::default().rounded(HALO_RADIUS),
+                ..renderer::Quad::default()
+            },
+            roles.indicator().scale_alpha(0.12),
+        );
+    }
+
+    renderer.fill_quad(
+        renderer::Quad {
+            bounds: circle(THUMB_RADIUS),
+            border: Border::default()
+                .color(ring)
+                .width(RING_WIDTH)
+                .rounded(THUMB_RADIUS),
+            shadow: Shadow {
+                color: roles.shadow.scale_alpha(0.2),
+                offset: Vector::new(0.0, 1.0),
+                blur_radius: 2.0,
+            },
+            ..renderer::Quad::default()
+        },
+        roles.surface,
+    );
 }
 
 impl<Message> Widget<Message, Theme, iced::Renderer> for Track<'_, Message> {
@@ -633,7 +1021,7 @@ impl<Message> Widget<Message, Theme, iced::Renderer> for Track<'_, Message> {
             Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. })
                 if state.focused && !shell.is_event_captured() && modifiers.is_empty() =>
             {
-                if let Some(step) = self.step_of(key) {
+                if let Some(step) = step_of(key) {
                     let t = fraction(self.value, self.min, self.max);
                     let value = self.value_at(stepped(t, self.divisions, step));
 
@@ -660,65 +1048,23 @@ impl<Message> Widget<Message, Theme, iced::Renderer> for Track<'_, Message> {
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        use iced::advanced::Renderer as _;
-
         let state = tree.state.downcast_ref::<TrackState>();
-        let roles = theme.roles();
         let bounds = layout.bounds();
         let enabled = self.enabled();
-        let indicator = roles.indicator();
-
-        let (active, inactive, ring) = if enabled {
-            (indicator, roles.surface_container_highest, indicator)
-        } else {
-            (
-                roles.on_surface.scale_alpha(DISABLED_CONTENT_OPACITY),
-                roles.on_surface.scale_alpha(0.12),
-                blend(
-                    roles.surface,
-                    roles.on_surface.scale_alpha(DISABLED_CONTENT_OPACITY),
-                ),
-            )
-        };
+        let (active, inactive, ring) = track_colors(theme, enabled);
 
         let t = fraction(self.value, self.min, self.max);
-        let center = self.thumb_center(bounds, t);
-        let start = self.thumb_center(bounds, 0.0);
-        let end = self.thumb_center(bounds, 1.0);
+        let center = thumb_center(bounds, self.vertical, t);
+        let start = thumb_center(bounds, self.vertical, 0.0);
+        let end = thumb_center(bounds, self.vertical, 1.0);
 
-        let bar = |from: Point, to: Point, thickness: f32| {
-            let (x0, x1) = (from.x.min(to.x), from.x.max(to.x));
-            let (y0, y1) = (from.y.min(to.y), from.y.max(to.y));
-
-            if self.vertical {
-                Rectangle::new(
-                    Point::new(x0 - thickness / 2.0, y0),
-                    Size::new(thickness, y1 - y0),
-                )
-            } else {
-                Rectangle::new(
-                    Point::new(x0, y0 - thickness / 2.0),
-                    Size::new(x1 - x0, thickness),
-                )
-            }
-        };
-
-        renderer.fill_quad(
-            renderer::Quad {
-                bounds: bar(center, end, TRACK_HEIGHT),
-                border: Border::default().rounded(TRACK_HEIGHT / 2.0),
-                ..renderer::Quad::default()
-            },
-            inactive,
-        );
-
-        let active_height = TRACK_HEIGHT + ACTIVE_TRACK_EXTRA;
-        renderer.fill_quad(
-            renderer::Quad {
-                bounds: bar(start, center, active_height),
-                border: Border::default().rounded(active_height / 2.0),
-                ..renderer::Quad::default()
-            },
+        draw_bar(renderer, self.vertical, center, end, TRACK_HEIGHT, inactive);
+        draw_bar(
+            renderer,
+            self.vertical,
+            start,
+            center,
+            TRACK_HEIGHT + ACTIVE_TRACK_EXTRA,
             active,
         );
 
@@ -726,43 +1072,352 @@ impl<Message> Widget<Message, Theme, iced::Renderer> for Track<'_, Message> {
         let halo =
             enabled && (hovered || state.dragging.is_some() || (state.focused && state.keyboard));
 
-        let circle = |radius: f32| Rectangle {
-            x: center.x - radius,
-            y: center.y - radius,
-            width: 2.0 * radius,
-            height: 2.0 * radius,
-        };
-
-        if halo {
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: circle(HALO_RADIUS),
-                    border: Border::default().rounded(HALO_RADIUS),
-                    ..renderer::Quad::default()
-                },
-                indicator.scale_alpha(0.12),
-            );
-        }
-
-        renderer.fill_quad(
-            renderer::Quad {
-                bounds: circle(THUMB_RADIUS),
-                border: Border::default()
-                    .color(ring)
-                    .width(RING_WIDTH)
-                    .rounded(THUMB_RADIUS),
-                shadow: Shadow {
-                    color: roles.shadow.scale_alpha(0.2),
-                    offset: Vector::new(0.0, 1.0),
-                    blur_radius: 2.0,
-                },
-                ..renderer::Quad::default()
-            },
-            roles.surface,
-        );
+        draw_thumb(renderer, theme, center, ring, halo);
 
         if let (Some(label), Some(_)) = (&self.indicator, state.dragging) {
             draw_indicator(renderer, theme, label, center, *viewport);
+        }
+    }
+
+    fn mouse_interaction(
+        &self,
+        _tree: &Tree,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        _viewport: &Rectangle,
+        _renderer: &iced::Renderer,
+    ) -> mouse::Interaction {
+        if self.enabled() && cursor.is_over(layout.bounds()) {
+            mouse::Interaction::Pointer
+        } else {
+            mouse::Interaction::default()
+        }
+    }
+}
+
+/// The track and the two thumbs of a [`RangeSlider`], which take the
+/// pointer and the keyboard.
+struct RangeTrack<'a, Message> {
+    values: [f32; 2],
+    min: f32,
+    max: f32,
+    divisions: Option<u32>,
+    on_change: Option<Box<dyn Fn(f32, f32) -> Message + 'a>>,
+    on_change_start: Option<Box<dyn Fn(f32, f32) -> Message + 'a>>,
+    on_change_end: Option<Box<dyn Fn(f32, f32) -> Message + 'a>>,
+    indicators: Option<[String; 2]>,
+    vertical: bool,
+    length: f32,
+    ids: [Option<Id>; 2],
+}
+
+/// The interaction state of a [`RangeTrack`]: one [`TrackState`] per
+/// thumb, whose `dragging` holds the range last published while that
+/// thumb is dragged.
+#[derive(Debug, Clone, Copy, Default)]
+struct RangeState {
+    thumbs: [TrackState; 2],
+    range: [f32; 2],
+}
+
+impl<Message> RangeTrack<'_, Message> {
+    fn enabled(&self) -> bool {
+        self.on_change.is_some() && self.max > self.min
+    }
+
+    /// The value at the position `t` along the range, snapped to the
+    /// divisions.
+    fn value_at(&self, t: f32) -> f32 {
+        value_at(self.min, self.max, self.divisions, t)
+    }
+
+    /// The range after moving the thumb `index` to `value`, which stops at
+    /// the other thumb.
+    fn moved(&self, range: [f32; 2], index: usize, value: f32) -> [f32; 2] {
+        let mut next = range;
+
+        next[index] = if index == 0 {
+            value.min(range[1])
+        } else {
+            value.max(range[0])
+        };
+
+        next
+    }
+
+    /// The thumb nearest to the position `t`; on a tie, the end thumb when
+    /// `t` lies past it.
+    fn nearest(&self, t: f32) -> usize {
+        let start = fraction(self.values[0], self.min, self.max);
+        let end = fraction(self.values[1], self.min, self.max);
+        let (to_start, to_end) = ((t - start).abs(), (t - end).abs());
+
+        if to_end < to_start || (to_end == to_start && t > end) {
+            1
+        } else {
+            0
+        }
+    }
+
+    /// Publishes a change to `range`, between the start and end messages
+    /// when `whole`.
+    fn publish(&self, shell: &mut Shell<'_, Message>, range: [f32; 2], whole: bool) {
+        if whole && let Some(start) = &self.on_change_start {
+            shell.publish(start(self.values[0], self.values[1]));
+        }
+
+        if let Some(on_change) = &self.on_change {
+            shell.publish(on_change(range[0], range[1]));
+        }
+
+        if whole && let Some(end) = &self.on_change_end {
+            shell.publish(end(range[0], range[1]));
+        }
+    }
+}
+
+impl<Message> Widget<Message, Theme, iced::Renderer> for RangeTrack<'_, Message> {
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<RangeState>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(RangeState::default())
+    }
+
+    fn size(&self) -> Size<Length> {
+        if self.vertical {
+            Size::new(
+                Length::Fixed(2.0 * THUMB_RADIUS),
+                Length::Fixed(self.length),
+            )
+        } else {
+            Size::new(Length::Fill, Length::Fixed(2.0 * THUMB_RADIUS))
+        }
+    }
+
+    fn layout(
+        &mut self,
+        _tree: &mut Tree,
+        _renderer: &iced::Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        let size = self.size();
+
+        layout::atomic(limits, size.width, size.height)
+    }
+
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        _renderer: &iced::Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        let state = tree.state.downcast_mut::<RangeState>();
+        let [start, end] = &mut state.thumbs;
+
+        if self.enabled() {
+            // Each thumb registers the square around its own center, so the
+            // two focus stops have distinct bounds.
+            let bounds = layout.bounds();
+            let [start_bounds, end_bounds] = self.values.map(|value| {
+                let center =
+                    thumb_center(bounds, self.vertical, fraction(value, self.min, self.max));
+                Rectangle::new(
+                    Point::new(center.x - THUMB_RADIUS, center.y - THUMB_RADIUS),
+                    Size::new(2.0 * THUMB_RADIUS, 2.0 * THUMB_RADIUS),
+                )
+            });
+            operation.focusable(self.ids[0].as_ref(), start_bounds, start);
+            operation.focusable(self.ids[1].as_ref(), end_bounds, end);
+        } else {
+            start.focused = false;
+            end.focused = false;
+        }
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        _renderer: &iced::Renderer,
+        _clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, Message>,
+        _viewport: &Rectangle,
+    ) {
+        let state = tree.state.downcast_mut::<RangeState>();
+        let bounds = layout.bounds();
+
+        if !self.enabled() {
+            *state = RangeState::default();
+            return;
+        }
+
+        let dragged = state
+            .thumbs
+            .iter()
+            .position(|thumb| thumb.dragging.is_some());
+
+        match event {
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+            | Event::Touch(touch::Event::FingerPressed { .. }) => {
+                if let Some(position) = cursor.position_over(bounds) {
+                    let t = locate(bounds, self.vertical, position);
+                    let index = self.nearest(t);
+                    let range = self.moved(self.values, index, self.value_at(t));
+
+                    if let Some(start) = &self.on_change_start {
+                        shell.publish(start(self.values[0], self.values[1]));
+                    }
+                    if range != self.values {
+                        self.publish(shell, range, false);
+                    }
+
+                    for (other, thumb) in state.thumbs.iter_mut().enumerate() {
+                        thumb.focused = other == index;
+                        thumb.keyboard = false;
+                        thumb.dragging = (other == index).then_some(range[index]);
+                    }
+                    state.range = range;
+                    shell.capture_event();
+                    shell.request_redraw();
+                } else if state.thumbs.iter().any(|thumb| thumb.focused) {
+                    for thumb in &mut state.thumbs {
+                        thumb.focused = false;
+                    }
+                    shell.request_redraw();
+                }
+            }
+            Event::Mouse(mouse::Event::CursorMoved { .. })
+            | Event::Touch(touch::Event::FingerMoved { .. }) => {
+                if let Some(index) = dragged {
+                    if let Some(position) = cursor.land().position() {
+                        let t = locate(bounds, self.vertical, position);
+                        let range = self.moved(state.range, index, self.value_at(t));
+
+                        if range != state.range {
+                            self.publish(shell, range, false);
+                            state.range = range;
+                            state.thumbs[index].dragging = Some(range[index]);
+                        }
+                    }
+
+                    shell.capture_event();
+                    shell.request_redraw();
+                } else if cursor.is_over(bounds) {
+                    shell.request_redraw();
+                }
+            }
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+            | Event::Touch(touch::Event::FingerLifted { .. } | touch::Event::FingerLost { .. }) => {
+                if let Some(index) = dragged {
+                    state.thumbs[index].dragging = None;
+
+                    if let Some(end) = &self.on_change_end {
+                        shell.publish(end(state.range[0], state.range[1]));
+                    }
+                    shell.request_redraw();
+                }
+            }
+            Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. })
+                if !shell.is_event_captured() && modifiers.is_empty() =>
+            {
+                let Some(index) = state.thumbs.iter().position(|thumb| thumb.focused) else {
+                    return;
+                };
+
+                if let Some(step) = step_of(key) {
+                    let t = fraction(self.values[index], self.min, self.max);
+                    let value = self.value_at(stepped(t, self.divisions, step));
+                    let range = self.moved(self.values, index, value);
+
+                    if range != self.values {
+                        self.publish(shell, range, true);
+                    }
+
+                    state.thumbs[index].keyboard = true;
+                    shell.capture_event();
+                    shell.request_redraw();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn draw(
+        &self,
+        tree: &Tree,
+        renderer: &mut iced::Renderer,
+        theme: &Theme,
+        _style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+    ) {
+        let state = tree.state.downcast_ref::<RangeState>();
+        let bounds = layout.bounds();
+        let enabled = self.enabled();
+        let (active, inactive, ring) = track_colors(theme, enabled);
+
+        let centers = self
+            .values
+            .map(|value| thumb_center(bounds, self.vertical, fraction(value, self.min, self.max)));
+        let start = thumb_center(bounds, self.vertical, 0.0);
+        let end = thumb_center(bounds, self.vertical, 1.0);
+
+        draw_bar(
+            renderer,
+            self.vertical,
+            start,
+            centers[0],
+            TRACK_HEIGHT,
+            inactive,
+        );
+        draw_bar(
+            renderer,
+            self.vertical,
+            centers[1],
+            end,
+            TRACK_HEIGHT,
+            inactive,
+        );
+        draw_bar(
+            renderer,
+            self.vertical,
+            centers[0],
+            centers[1],
+            TRACK_HEIGHT + ACTIVE_TRACK_EXTRA,
+            active,
+        );
+
+        let hovered = cursor
+            .position_over(bounds)
+            .map(|position| self.nearest(locate(bounds, self.vertical, position)));
+        let dragged = state
+            .thumbs
+            .iter()
+            .position(|thumb| thumb.dragging.is_some());
+        let busy = dragged.or_else(|| {
+            state
+                .thumbs
+                .iter()
+                .position(|thumb| thumb.focused && thumb.keyboard)
+        });
+
+        // The thumb being moved is drawn last, over the other one.
+        let order = if busy == Some(0) { [1, 0] } else { [0, 1] };
+
+        for index in order {
+            let halo = enabled && (hovered == Some(index) || busy == Some(index));
+
+            draw_thumb(renderer, theme, centers[index], ring, halo);
+        }
+
+        if let (Some(labels), Some(index)) = (&self.indicators, dragged) {
+            draw_indicator(renderer, theme, &labels[index], centers[index], *viewport);
         }
     }
 
@@ -861,12 +1516,13 @@ fn draw_indicator<Renderer>(
     });
 }
 
-/// The marks of a [`Slider`]: a dot at each value, in the accent once the
-/// value reaches it, with its label under it (beside it when vertical).
+/// The marks of a slider: a dot at each value, in the accent once the value
+/// (or the range) reaches it, with its label under it (beside it when
+/// vertical).
 struct Marks<'a, Message> {
     values: Vec<f32>,
     labels: Vec<Element<'a, Message>>,
-    value: f32,
+    reached: (f32, f32),
     min: f32,
     max: f32,
     vertical: bool,
@@ -877,7 +1533,7 @@ struct Marks<'a, Message> {
 impl<'a, Message: 'a> Marks<'a, Message> {
     fn new(
         marks: Vec<Mark<'a>>,
-        value: f32,
+        reached: (f32, f32),
         min: f32,
         max: f32,
         vertical: bool,
@@ -898,7 +1554,7 @@ impl<'a, Message: 'a> Marks<'a, Message> {
         Self {
             values,
             labels,
-            value,
+            reached,
             min,
             max,
             vertical,
@@ -1027,7 +1683,7 @@ impl<Message> Widget<Message, Theme, iced::Renderer> for Marks<'_, Message> {
         let bounds = layout.bounds();
 
         for (index, mark) in self.values.iter().enumerate() {
-            let reached = *mark <= self.value;
+            let reached = *mark >= self.reached.0 && *mark <= self.reached.1;
             let color = if reached {
                 roles.semantic.primary_text
             } else {
