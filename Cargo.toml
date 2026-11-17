@@ -47,3 +47,8 @@ todo = "deny"
 # renderers stay usable while the workspace crates keep fast rebuilds.
 [profile.dev.package."*"]
 opt-level = 1
+
+# Debug builds keep only line tables: backtraces still name files and lines,
+# while the linker needs far less memory for the test binaries.
+[profile.dev]
+debug = "line-tables-only"

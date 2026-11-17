@@ -22,7 +22,7 @@ use oito2_iced::format::{ByteUnits, Format};
 use serde_json::Value;
 
 fn fixture() -> Value {
-    let text = include_str!("fixtures/parity/format.json");
+    let text = include_str!("../fixtures/parity/format.json");
     serde_json::from_str(text).expect("format.json is valid JSON")
 }
 

@@ -22,7 +22,7 @@ use oito2_iced::tokens::{Accent, Neutrals, Status, radius, sizes, spacing, typog
 use serde_json::Value;
 
 fn fixture() -> Value {
-    let text = include_str!("fixtures/parity/tokens.json");
+    let text = include_str!("../fixtures/parity/tokens.json");
     serde_json::from_str(text).expect("tokens.json is valid JSON")
 }
 

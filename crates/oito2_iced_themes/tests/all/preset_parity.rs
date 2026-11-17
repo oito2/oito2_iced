@@ -23,7 +23,7 @@ use oito2_iced_themes::Preset;
 use serde_json::Value;
 
 fn fixture() -> Value {
-    let text = include_str!("fixtures/parity/schemes.json");
+    let text = include_str!("../fixtures/parity/schemes.json");
     serde_json::from_str(text).expect("schemes.json is valid JSON")
 }
 

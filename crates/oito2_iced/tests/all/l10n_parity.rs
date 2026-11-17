@@ -21,7 +21,7 @@ use oito2_iced::l10n::{Localizations, TimeUnit};
 use serde_json::Value;
 
 fn fixture() -> Value {
-    let text = include_str!("fixtures/parity/l10n.json");
+    let text = include_str!("../fixtures/parity/l10n.json");
     serde_json::from_str(text).expect("l10n.json is valid JSON")
 }
 

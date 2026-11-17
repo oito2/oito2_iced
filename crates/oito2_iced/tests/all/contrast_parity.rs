@@ -21,7 +21,7 @@ use oito2_iced::theme::contrast;
 use serde_json::Value;
 
 fn fixture() -> Value {
-    let text = include_str!("fixtures/parity/foundation.json");
+    let text = include_str!("../fixtures/parity/foundation.json");
     let value: Value = serde_json::from_str(text).expect("foundation.json is valid JSON");
 
     value["contrast"].clone()
