@@ -1,0 +1,170 @@
+// Copyright (C) 2026  OITO2
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+//! Generates the API reference of the showcase from the public items of the
+//! published workspace crates and their doc comments, or checks that it is
+//! up to date.
+//!
+//! ```sh
+//! cargo run -p oito2_iced_gen_docs
+//! cargo run -p oito2_iced_gen_docs -- --check
+//! ```
+//!
+//! The crates are read with `syn` from their root file, following their
+//! `mod` declarations (see [`parse`] for what is listed). The output is
+//! `apps/showcase/src/generated/api_reference.rs`, one `Item` per public
+//! path, sorted by path; `--check` writes nothing and exits with status 1
+//! when that file differs from what would be written.
+
+mod attrs;
+mod model;
+mod parse;
+mod signature;
+
+use std::fmt::Write as _;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
+
+use model::Entry;
+
+/// The documented crates, each read from `crates/<name>/src/lib.rs`.
+const CRATES: &[&str] = &[
+    "oito2_iced",
+    "oito2_iced_settings",
+    "oito2_iced_themes",
+    "oito2_iced_syntax",
+    "oito2_iced_extras",
+    "oito2_iced_files",
+];
+
+/// Modules listed without their items: the generated Lucide icons.
+const SUMMARISED: &[&str] = &["oito2_iced::icon::lucide"];
+
+/// The generated file, relative to the workspace root.
+const OUTPUT: &str = "apps/showcase/src/generated/api_reference.rs";
+
+/// The license header of the generated file.
+const HEADER: &str = "// Copyright (C) 2026  OITO2
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+";
+
+fn main() -> ExitCode {
+    let check = match std::env::args().nth(1).as_deref() {
+        None => false,
+        Some("--check") => true,
+        Some(other) => {
+            eprintln!("unknown argument `{other}`; usage: oito2_iced_gen_docs [--check]");
+            return ExitCode::from(2);
+        }
+    };
+    match run(check) {
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => {
+            eprintln!(
+                "{OUTPUT} is out of date; run `cargo run -p oito2_iced_gen_docs` and commit the result"
+            );
+            ExitCode::FAILURE
+        }
+        Err(error) => {
+            eprintln!("error: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// The workspace root.
+fn workspace() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// Generates the reference, then writes it or, with `check`, compares it
+/// with the file on disk. Returns whether the file on disk is up to date.
+fn run(check: bool) -> Result<bool, String> {
+    let root = workspace();
+    let read = |path: &Path| {
+        fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))
+    };
+    let mut entries = Vec::new();
+    for krate in CRATES {
+        let lib = root.join("crates").join(krate).join("src/lib.rs");
+        entries.extend(parse::document(krate, &lib, SUMMARISED, &read)?);
+    }
+    entries.sort_by(|a, b| (&a.path, a.kind).cmp(&(&b.path, b.kind)));
+    let source = render(&entries);
+
+    let output = root.join(OUTPUT);
+    let current = fs::read_to_string(&output).unwrap_or_default();
+    if check {
+        return Ok(current == source);
+    }
+    if current != source {
+        fs::write(&output, &source).map_err(|error| format!("{}: {error}", output.display()))?;
+    }
+    println!("{OUTPUT}: {} items, {} bytes", entries.len(), source.len());
+    Ok(true)
+}
+
+/// The Rust source of the generated file: the license header, the
+/// `@generated` marker and the `ITEMS` static, formatted as rustfmt
+/// formats it.
+fn render(entries: &[Entry]) -> String {
+    let mut out = String::from(HEADER);
+    out.push_str("\n// @generated by cargo run -p oito2_iced_gen_docs; do not edit.\n\n");
+    out.push_str("use super::{Item, Kind, Member};\n\n");
+    out.push_str("/// Every documented item, by path.\n");
+    out.push_str("pub static ITEMS: &[Item] = &[\n");
+    for entry in entries {
+        let _ = writeln!(out, "    Item {{");
+        let _ = writeln!(out, "        path: {:?},", entry.path);
+        let _ = writeln!(out, "        name: {:?},", entry.name);
+        let _ = writeln!(out, "        kind: Kind::{},", entry.kind.variant());
+        let _ = writeln!(out, "        signature: {:?},", entry.signature);
+        let _ = writeln!(out, "        docs: {:?},", entry.docs);
+        if entry.members.is_empty() {
+            let _ = writeln!(out, "        members: &[],");
+        } else {
+            let _ = writeln!(out, "        members: &[");
+            for member in &entry.members {
+                let _ = writeln!(out, "            Member {{");
+                let _ = writeln!(out, "                name: {:?},", member.name);
+                let _ = writeln!(
+                    out,
+                    "                kind: Kind::{},",
+                    member.kind.variant()
+                );
+                let _ = writeln!(out, "                signature: {:?},", member.signature);
+                let _ = writeln!(out, "                summary: {:?},", member.summary);
+                let _ = writeln!(out, "            }},");
+            }
+            let _ = writeln!(out, "        ],");
+        }
+        let _ = writeln!(out, "    }},");
+    }
+    out.push_str("];\n");
+    out
+}

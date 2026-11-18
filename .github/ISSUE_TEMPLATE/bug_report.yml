@@ -1,0 +1,72 @@
+name: Bug report
+description: Report something in a crate or the showcase that doesn't work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Security problems must not be reported here: follow the [Security Policy](https://github.com/oito2/oito2_iced/security/policy).
+  - type: dropdown
+    id: crate
+    attributes:
+      label: Crate
+      options:
+        - oito2_iced
+        - oito2_iced_settings
+        - oito2_iced_themes
+        - oito2_iced_syntax
+        - oito2_iced_extras
+        - oito2_iced_files
+        - Showcase
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: The commit of oito2_iced you use (the `rev` in your `Cargo.lock`, or `git rev-parse HEAD` in a clone).
+      placeholder: e.g. 090ff59
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Steps to reproduce, the expected behavior and the actual behavior. A minimal Rust snippet helps a lot.
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - Windows
+        - macOS
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: On Linux, the distribution, desktop environment and session (e.g. Ubuntu 24.04, GNOME 46, Wayland); on Windows and macOS, the system version.
+  - type: dropdown
+    id: renderer
+    attributes:
+      label: Renderer
+      description: Does the problem also happen with `ICED_BACKEND=tiny-skia`?
+      options:
+        - Default (wgpu)
+        - Software (tiny-skia)
+        - Both
+        - Not sure
+  - type: input
+    id: rust
+    attributes:
+      label: Rust version
+      description: The output of `rustc --version`.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and screenshots
+      description: Compiler errors, panics, terminal output or screenshots.

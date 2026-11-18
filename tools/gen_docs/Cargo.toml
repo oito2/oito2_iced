@@ -1,0 +1,18 @@
+[package]
+name = "oito2_iced_gen_docs"
+description = "Generates the API reference of the showcase from the public items of the workspace crates."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+prettyplease.workspace = true
+syn.workspace = true
+
+[lints]
+workspace = true

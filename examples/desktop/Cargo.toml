@@ -1,0 +1,24 @@
+[package]
+name = "oito2_iced_desktop_example"
+description = "Desktop integration recipes for applications built on oito2_iced: tray icon, notifications and autostart."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+oito2_iced.workspace = true
+iced = { workspace = true, features = ["wgpu", "tiny-skia", "thread-pool", "x11", "wayland"] }
+
+# The tray icon and the notifications talk to the desktop over D-Bus, through
+# the pure-Rust zbus; both recipes are Linux-only.
+[target.'cfg(target_os = "linux")'.dependencies]
+ksni.workspace = true
+notify-rust.workspace = true
+
+[lints]
+workspace = true

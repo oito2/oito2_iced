@@ -22,9 +22,9 @@ ignore = [
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser: font parsing of fontdb, pulled by cosmic-text 0.15 (iced)" },
     { id = "RUSTSEC-2026-0206", reason = "rustybuzz: text shaping of usvg, pulled by resvg 0.45 (iced svg feature)" },
     { id = "RUSTSEC-2025-0141", reason = "bincode: loads the packed syntaxes of syntect 5.3 (oito2_iced_syntax, as in iced_highlighter); no release without it" },
-    { id = "RUSTSEC-2026-0370", reason = "zvariant: pulled by zbus 5 through mundy 0.2 (iced_winit theme detection)" },
-    { id = "RUSTSEC-2026-0371", reason = "zbus_names: pulled by zbus 5 through mundy 0.2 (iced_winit theme detection)" },
-    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: pulled by zbus 5 through mundy 0.2 (iced_winit theme detection)" },
+    { id = "RUSTSEC-2026-0370", reason = "zvariant: pulled by zbus 5 through mundy 0.2 (iced_winit theme detection) and ksni 0.3 (examples/desktop)" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names: pulled by zbus 5 through mundy 0.2 (iced_winit theme detection) and ksni 0.3 (examples/desktop)" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: pulled by zbus 5 through mundy 0.2 (iced_winit theme detection) and ksni 0.3 (examples/desktop)" },
 ]
 
 [licenses]
@@ -46,6 +46,12 @@ allow = [
     "Zlib",
 ]
 confidence-threshold = 0.8
+# Public-domain dedications compatible with GPL-3.0, allowed only for the
+# crate that uses them.
+exceptions = [
+    # The tray icon of the desktop recipes (examples/desktop).
+    { allow = ["Unlicense"], crate = "ksni" },
+]
 
 [bans]
 multiple-versions = "warn"

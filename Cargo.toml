@@ -9,6 +9,8 @@ members = [
     "crates/oito2_iced_test_utils",
     "crates/oito2_iced_themes",
     "apps/showcase",
+    "examples/desktop",
+    "tools/gen_docs",
     "tools/icons",
     "tools/parity",
 ]
@@ -45,6 +47,12 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg"]
 rfd = { version = "0.18", default-features = false, features = ["xdg-portal", "wayland"] }
 png = "0.18"
 qrcode = { version = "0.13", default-features = false }
+# Desktop integration recipes (examples/desktop): D-Bus through the pure-Rust
+# zbus, driven by async-io instead of tokio.
+ksni = { version = "0.3.7", default-features = false, features = ["async-io"] }
+notify-rust = { version = "4.19", default-features = false, features = ["z"] }
+syn = { version = "2.0", default-features = false, features = ["clone-impls", "full", "parsing", "printing"] }
+prettyplease = "0.2"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

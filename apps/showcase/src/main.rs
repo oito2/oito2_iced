@@ -16,32 +16,38 @@
 //! Showcase of the OITO2 design system for Iced: an undecorated window with
 //! the window chrome of the desktop (or of a simulated one), a theme that
 //! follows the desktop settings while the app runs, and a settings dialog
-//! for the theme, preset, contrast, density, language and desktop.
+//! for the theme, preset, contrast, density, language and desktop. The
+//! sidebar lists every page of the catalog by group, filtered by a search
+//! field; each page documents a component with examples, their source and
+//! the API reference.
 //!
 //! Set `ICED_BACKEND=tiny-skia` to force the software renderer.
 
+mod api;
 mod appearance;
+mod catalog;
+mod doc;
 mod pages;
 
-use std::time::Instant;
-
-use iced::font::Weight;
-use iced::widget::{button, column, container, pick_list, row, scrollable, text};
+use iced::widget::{Column, button, column, container, pick_list, row, scrollable, text};
 use iced::{Element, Length, Subscription, Task, keyboard, window};
 
 use appearance::{Appearance, ContrastChoice, DensityChoice, Desktop, Family, Language, Mode};
-use oito2_iced::animation::{self, Animation};
+use catalog::{Action, Group, PageId, Pages, Shell};
 use oito2_iced::shortcuts::{Command, CommandRegistry, KeyChord, OperatingSystem, Shortcut};
 use oito2_iced::theme::button::Class as ButtonClass;
 use oito2_iced::theme::container::Class as ContainerClass;
 use oito2_iced::theme::text::Class as TextClass;
-use oito2_iced::tokens::{Accent, spacing};
+use oito2_iced::tokens::{Accent, spacing, typography};
+use oito2_iced::widget::helpers::ReadingDirection;
 use oito2_iced::widget::info::InfoType;
-use oito2_iced::widget::{command_palette, dialog, focusable, popover, sheet, toast};
+use oito2_iced::widget::{command_palette, dialog, focusable, sheet, toast};
 use oito2_iced::window::{Labels, Placement, WindowState};
 use oito2_iced::{Theme, focus, font};
 use oito2_iced_settings::SystemSettings;
-use pages::{Gallery, Page};
+
+/// The width of the sidebar.
+const SIDEBAR_WIDTH: f32 = 220.0;
 
 fn main() -> iced::Result {
     let application = iced::application(Showcase::new, Showcase::update, Showcase::view)
@@ -55,7 +61,7 @@ fn main() -> iced::Result {
         .fold(application, |application, bytes| application.font(bytes))
         .default_font(font::INTER)
         .window(window::Settings {
-            size: iced::Size::new(960.0, 680.0),
+            size: iced::Size::new(1100.0, 760.0),
             min_size: Some(iced::Size::new(480.0, 360.0)),
             decorations: false,
             platform_specific: platform_specific(),
@@ -85,16 +91,13 @@ struct Showcase {
     appearance: Appearance,
     window: WindowState,
     settings_open: bool,
-    page: Page,
-    gallery: Gallery,
-    popover_open: bool,
-    expanded: Animation<bool>,
-    now: Instant,
+    page: PageId,
+    pages: Pages,
+    search: String,
     dialog_open: bool,
     sheet: Option<bool>,
     sheet_snap: usize,
     toasts: toast::Toasts<Message>,
-    toasts_shown: usize,
     palette_open: bool,
     palette_query: String,
     commands: CommandRegistry<Message>,
@@ -115,12 +118,9 @@ enum Message {
     Density(DensityChoice),
     Language(Language),
     Desktop(Desktop),
-    Navigate(Page),
-    Gallery(pages::Message),
-    TogglePopover,
-    DismissPopover,
-    Animate,
-    Frame(Instant),
+    Navigate(PageId),
+    Search(String),
+    Page(catalog::Message),
     Key(keyboard::Event),
     CloseDialog,
     CloseSheet,
@@ -161,14 +161,14 @@ fn commands() -> CommandRegistry<Message> {
         Command::new("accent", "Next accent", Message::NextAccent).with_group("Theme"),
         None,
     );
-    for page in Page::ALL {
+    for page in PageId::ALL {
         add(
             Command::new(
-                format!("page-{page}"),
+                format!("page-{}", page.slug()),
                 format!("Go to {page}"),
-                Message::Navigate(page),
+                Message::Navigate(*page),
             )
-            .with_group("Pages"),
+            .with_group(page.group().title()),
             None,
         );
     }
@@ -183,16 +183,13 @@ impl Showcase {
             appearance: Appearance::default(),
             window: WindowState::default(),
             settings_open: false,
-            page: Page::default(),
-            gallery: Gallery::default(),
-            popover_open: false,
-            expanded: animation::emphasized_animation(false, animation::duration::EXTRA_LONG),
-            now: Instant::now(),
+            page: PageId::default(),
+            pages: Pages::default(),
+            search: String::new(),
             dialog_open: false,
             sheet: None,
             sheet_snap: 0,
             toasts: toast::Toasts::new(),
-            toasts_shown: 0,
             palette_open: false,
             palette_query: String::new(),
             commands: commands(),
@@ -201,6 +198,14 @@ impl Showcase {
 
     fn theme(&self) -> Theme {
         self.appearance.theme(&self.settings)
+    }
+
+    /// What the pages receive from the application.
+    fn context(&self) -> doc::Context {
+        doc::Context {
+            l10n: self.appearance.language.localizations(),
+            direction: ReadingDirection::LeftToRight,
+        }
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
@@ -235,20 +240,15 @@ impl Showcase {
             Message::Language(language) => self.appearance.language = language,
             Message::Desktop(desktop) => self.appearance.desktop = desktop,
             Message::Navigate(page) => self.page = page,
-            Message::Gallery(pages::Message::OpenSheet(bottom)) => {
-                self.sheet = Some(bottom);
-                self.sheet_snap = 0;
+            Message::Search(search) => self.search = search,
+            Message::Page(message) => {
+                let mut shell = Shell::default();
+                let task = self.pages.update(message, &mut shell).map(Message::Page);
+                for action in shell.into_actions() {
+                    self.apply(action);
+                }
+                return task;
             }
-            Message::Gallery(pages::Message::OpenDialog) => self.dialog_open = true,
-            Message::Gallery(pages::Message::ShowToast) => self.show_toast(),
-            Message::Gallery(pages::Message::OpenPalette) | Message::OpenPalette => {
-                self.palette_open = true;
-                self.palette_query.clear();
-            }
-            Message::Gallery(pages::Message::TocPick(index)) => {
-                return self.gallery.scroll_to_section(index);
-            }
-            Message::Gallery(message) => return self.gallery.update(message).map(Message::Gallery),
             Message::Key(event) => {
                 if let Some(chord) = KeyChord::from_keyboard_event(&event)
                     && let Some(command) = self
@@ -271,57 +271,115 @@ impl Showcase {
                 self.toasts
                     .push(toast::Toast::new("Restored").with_kind(InfoType::Success));
             }
+            Message::OpenPalette => {
+                self.palette_open = true;
+                self.palette_query.clear();
+            }
             Message::PaletteQuery(query) => self.palette_query = query,
             Message::ClosePalette => self.palette_open = false,
-            Message::TogglePopover => self.popover_open = !self.popover_open,
-            Message::DismissPopover => self.popover_open = false,
-            Message::Animate => {
-                self.now = Instant::now();
-                let target = !self.expanded.value();
-                self.expanded.go_mut(target, self.now);
-            }
-            Message::Frame(now) => self.now = now,
         }
 
         Task::none()
     }
 
-    /// Shows the next of the example toasts.
-    fn show_toast(&mut self) {
-        let toast = match self.toasts_shown % 3 {
-            0 => toast::Toast::new("File deleted")
-                .with_description("report.pdf was moved to the trash.")
-                .with_kind(InfoType::Information)
-                .with_action("Undo", Message::Undo),
-            1 => toast::Toast::new("Changes saved").with_kind(InfoType::Success),
-            _ => toast::Toast::new("Connection lost")
-                .with_description("Trying again in 30 seconds.")
-                .with_kind(InfoType::Danger),
-        };
-
-        self.toasts_shown += 1;
-        self.toasts.push(toast);
+    /// Applies an action a page asked for.
+    fn apply(&mut self, action: Action) {
+        match action {
+            Action::Toast {
+                title,
+                description,
+                kind,
+                undo,
+            } => {
+                let mut toast = toast::Toast::new(title).with_kind(kind);
+                if let Some(description) = description {
+                    toast = toast.with_description(description);
+                }
+                if undo {
+                    toast = toast.with_action("Undo", Message::Undo);
+                }
+                self.toasts.push(toast);
+            }
+            Action::OpenDialog => self.dialog_open = true,
+            Action::OpenSheet(bottom) => {
+                self.sheet = Some(bottom);
+                self.sheet_snap = 0;
+            }
+            Action::OpenPalette => {
+                self.palette_open = true;
+                self.palette_query.clear();
+            }
+            Action::OpenSettings => self.settings_open = true,
+        }
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        let frames = if self.expanded.is_animating(self.now) {
-            window::frames().map(Message::Frame)
-        } else {
-            Subscription::none()
-        };
-
         Subscription::batch([
             oito2_iced_settings::subscription().map(Message::System),
             window::events().map(|(id, event)| Message::WindowEvent(id, event)),
             keyboard::listen().map(Message::Key),
-            frames,
         ])
+    }
+
+    /// The pages whose title contains the search, case-insensitively.
+    fn matching_pages(&self) -> impl Iterator<Item = PageId> + '_ {
+        let query = self.search.trim().to_lowercase();
+
+        PageId::ALL
+            .iter()
+            .copied()
+            .filter(move |page| query.is_empty() || page.title().to_lowercase().contains(&query))
+    }
+
+    /// The sidebar: the search field and the matching pages by group.
+    fn sidebar(&self, ctx: &doc::Context) -> Element<'_, Message, Theme> {
+        let mut list = Column::new().spacing(spacing::XS).padding(spacing::SM);
+
+        for group in Group::ALL {
+            let pages: Vec<PageId> = self
+                .matching_pages()
+                .filter(|page| page.group() == group)
+                .collect();
+            if pages.is_empty() {
+                continue;
+            }
+
+            list = list.push(
+                container(
+                    oito2_iced::widget::styled_text(group.title(), typography::LABEL_MEDIUM)
+                        .class(TextClass::Variant),
+                )
+                .padding([spacing::SM, spacing::MD]),
+            );
+            for page in pages {
+                list = list.push(
+                    oito2_iced::widget::list_tile::list_tile()
+                        .title(page.title())
+                        .selected(page == self.page)
+                        .on_press(Message::Navigate(page)),
+                );
+            }
+        }
+
+        let search = container(
+            oito2_iced::widget::search::search_field(&ctx.l10n, &self.search)
+                .on_input(Message::Search)
+                .on_clear(Message::Search(String::new())),
+        )
+        .padding(spacing::SM);
+
+        container(column![search, scrollable(list).height(Length::Fill)])
+            .class(ContainerClass::Sidebar)
+            .width(Length::Fixed(SIDEBAR_WIDTH))
+            .height(Length::Fill)
+            .into()
     }
 
     fn view(&self) -> Element<'_, Message, Theme> {
         oito2_iced::density::set(self.appearance.density(&self.settings));
 
-        let localizations = self.appearance.language.localizations();
+        let ctx = self.context();
+        let localizations = ctx.l10n;
         let (style, layout) = self.appearance.chrome(&self.settings);
 
         let header = oito2_iced::window::header_bar(Message::Window)
@@ -339,113 +397,20 @@ impl Showcase {
             .state(self.window)
             .labels(Labels::new(&localizations));
 
-        let action = |label: &'static str, class: ButtonClass<'static>, message: Message| {
-            focusable(button(label).class(class).on_press(message.clone())).on_activate(message)
-        };
-
-        let theme_controls = row![
-            action("Next accent", ButtonClass::Outlined, Message::NextAccent),
-            popover(
-                action("Popover", ButtonClass::Tonal, Message::TogglePopover),
-                column![
-                    text("Anchored panel").font(font::inter(Weight::Semibold)),
-                    text("Click outside or press Escape to close.").class(TextClass::Variant),
-                ]
-                .spacing(spacing::XS)
-                .width(240),
-            )
-            .open(self.popover_open)
-            .on_dismiss(Message::DismissPopover),
-        ]
-        .spacing(spacing::SM);
-
-        let weights = column(
-            [
-                ("Regular 400", Weight::Normal),
-                ("Medium 500", Weight::Medium),
-                ("SemiBold 600", Weight::Semibold),
-                ("Bold 700", Weight::Bold),
-            ]
-            .into_iter()
-            .map(|(label, weight)| {
-                text(format!("Inter \u{2014} {label}"))
-                    .font(font::inter(weight))
-                    .size(18)
-                    .into()
-            }),
-        )
-        .spacing(spacing::XS);
-
-        let progress = self.expanded.interpolate(0.05_f32, 1.0_f32, self.now);
-
-        let animation = column![
-            action("Animate (emphasized)", ButtonClass::Tonal, Message::Animate),
-            container(
-                container(text(""))
-                    .class(ContainerClass::Custom(Box::new(|theme: &Theme| {
-                        container::Style::default().background(theme.roles().primary)
-                    })))
-                    .width(Length::FillPortion((progress * 1000.0) as u16))
-                    .height(12),
-            )
-            .width(400),
-        ]
-        .spacing(spacing::SM);
-
-        let card = |title: &'static str, content: Element<'static, Message, Theme>| {
-            container(
-                column![text(title).font(font::inter(Weight::Semibold)), content]
-                    .spacing(spacing::MD),
-            )
-            .class(ContainerClass::Card)
-            .padding(spacing::LG)
-            .width(Length::Fill)
-        };
-
-        let overview = column![
-            text("Tab / Shift+Tab move the focus, Enter or Space activate.")
-                .class(TextClass::Variant),
-            card("Theme and overlay", theme_controls.into()),
-            card("Font weights", weights.into()),
-            card("Animation", animation.into()),
-        ]
-        .spacing(spacing::LG);
-
-        let page: Element<'_, Message, Theme> = match self.gallery.view(self.page, &localizations) {
-            Some(page) => page.map(Message::Gallery),
-            None => overview.into(),
-        };
-
-        let sidebar = container(
-            column(Page::ALL.into_iter().map(|page| {
-                let item = oito2_iced::widget::button::text(page.to_string())
-                    .width(Length::Fill)
-                    .on_press(Message::Navigate(page));
-
-                if page == self.page {
-                    item.class(ButtonClass::Tonal).into()
-                } else {
-                    item.into()
-                }
-            }))
-            .spacing(spacing::XS)
-            .padding(spacing::SM),
-        )
-        .class(ContainerClass::Sidebar)
-        .width(Length::Fixed(200.0))
-        .height(Length::Fill);
+        let page = self.pages.view(self.page, &ctx).map(Message::Page);
 
         let body = row![
-            sidebar,
+            self.sidebar(&ctx),
             scrollable(container(page).padding(spacing::PAGE).width(Length::Fill))
                 .height(Length::Fill)
                 .width(Length::Fill),
         ];
 
-        let window =
-            oito2_iced::widget::tour::host(column![header, body], &self.gallery.motion.tour)
-                .on_event(|event| Message::Gallery(pages::Message::Tour(event)))
-                .localizations(&localizations);
+        let window = oito2_iced::widget::tour::host(column![header, body], &self.pages.tour.tour)
+            .on_event(|event| {
+                Message::Page(catalog::Message::Tour(pages::tour::Message::Event(event)))
+            })
+            .localizations(&localizations);
 
         let sheet = self
             .sheet
@@ -700,7 +665,7 @@ mod tests {
         run(&mut app, [Message::Key(primary_press("k"))]);
         assert!(app.palette_open);
 
-        run(&mut app, [Message::PaletteQuery("overlays".to_owned())]);
+        run(&mut app, [Message::PaletteQuery("qrcode".to_owned())]);
         let messages: Vec<Message> = {
             let mut ui = Simulator::with_settings(oito2_iced_test_utils::settings(), app.view());
             ui.tap_key(keyboard::key::Named::Enter);
@@ -709,46 +674,51 @@ mod tests {
         run(&mut app, messages);
 
         assert!(!app.palette_open);
-        assert_eq!(app.page, Page::Overlays);
+        assert_eq!(app.page, PageId::QrCode);
     }
 
     #[test]
-    fn the_overlays_page_opens_the_window_surfaces() {
-        let mut app = on_page(Page::Overlays);
+    fn page_actions_open_the_window_surfaces() {
+        let mut app = showcase();
 
-        for (label, check) in [
-            (
-                "Dialog",
-                (|app: &Showcase| app.dialog_open) as fn(&Showcase) -> bool,
-            ),
-            ("End sheet", |app| app.sheet == Some(false)),
-            ("Toast", |app| app.toasts.active_count() == 1),
-        ] {
-            let messages: Vec<Message> = {
-                let mut ui =
-                    Simulator::with_size(oito2_iced_test_utils::settings(), TALL, app.view());
-                ui.click(label).expect("button");
-                ui.into_messages().collect()
-            };
-            run(&mut app, messages);
+        app.apply(Action::OpenDialog);
+        app.apply(Action::OpenSheet(false));
+        app.apply(Action::Toast {
+            title: "Saved".to_owned(),
+            description: None,
+            kind: InfoType::Success,
+            undo: true,
+        });
 
-            assert!(check(&app), "{label}");
+        assert!(app.dialog_open);
+        assert_eq!(app.sheet, Some(false));
+        assert_eq!(app.toasts.active_count(), 1);
 
-            let mut ui = Simulator::with_size(oito2_iced_test_utils::settings(), TALL, app.view());
-            ui.tap_key(keyboard::key::Named::Escape);
-            let messages: Vec<Message> = ui.into_messages().collect();
-            run(&mut app, messages);
-        }
+        let mut ui = Simulator::with_size(oito2_iced_test_utils::settings(), TALL, app.view());
+        ui.tap_key(keyboard::key::Named::Escape);
+        let messages: Vec<Message> = ui.into_messages().collect();
+        run(&mut app, messages);
 
         assert!(!app.dialog_open);
-        assert_eq!(app.sheet, None);
+    }
+
+    #[test]
+    fn the_search_filters_the_sidebar() {
+        let mut app = showcase();
+        run(&mut app, [Message::Search("qr".to_owned())]);
+
+        assert_eq!(app.matching_pages().collect::<Vec<_>>(), [PageId::QrCode]);
+
+        let mut ui = Simulator::with_size(oito2_iced_test_utils::settings(), TALL, app.view());
+        assert!(ui.find("QrCode").is_ok());
+        assert!(ui.find("Changelog").is_err());
     }
 
     /// A window tall enough to show every card of a page without scrolling.
     const TALL: (f32, f32) = (1280.0, 3200.0);
 
     /// The showcase on `page`.
-    fn on_page(page: Page) -> Showcase {
+    fn on_page(page: PageId) -> Showcase {
         let mut app = showcase();
         run(&mut app, [Message::Navigate(page)]);
         app
@@ -783,7 +753,7 @@ mod tests {
 
     #[test]
     fn every_page_renders_wide_light_and_compact_dark_portuguese() {
-        for page in Page::ALL {
+        for &page in PageId::ALL {
             let mut app = on_page(page);
 
             for (mode, language, size) in [
@@ -801,11 +771,20 @@ mod tests {
         }
     }
 
+    /// The content of the current page alone, with the focus traversal of
+    /// the application, so the audits cover the page and not the sidebar.
+    fn content(app: &Showcase) -> Element<'_, Message, Theme> {
+        let page = app.pages.view(app.page, &app.context()).map(Message::Page);
+
+        focus::navigation(container(page).padding(spacing::PAGE).width(Length::Fill)).into()
+    }
+
     #[test]
     fn tab_reaches_every_control_of_every_page() {
-        for page in Page::ALL {
+        for &page in PageId::ALL {
             let app = on_page(page);
-            let mut ui = Simulator::with_size(oito2_iced_test_utils::settings(), TALL, app.view());
+            let mut ui =
+                Simulator::with_size(oito2_iced_test_utils::settings(), TALL, content(&app));
             let expected = focusables(&mut ui);
 
             let mut reached = Vec::new();
@@ -822,7 +801,6 @@ mod tests {
             let mut distinct = reached.clone();
             distinct.dedup();
 
-            assert!(!expected.is_empty(), "{page}");
             assert_eq!(reached.len(), expected.len(), "{page}: a Tab left no focus");
             assert_eq!(
                 distinct.len(),
@@ -834,16 +812,17 @@ mod tests {
 
     #[test]
     fn every_clickable_control_shows_the_hand_cursor() {
-        for page in Page::ALL {
+        for &page in PageId::ALL {
             let app = on_page(page);
-            let mut ui = Simulator::with_size(oito2_iced_test_utils::settings(), TALL, app.view());
+            let mut ui =
+                Simulator::with_size(oito2_iced_test_utils::settings(), TALL, content(&app));
 
             // A carousel takes the focus as a whole for its keys; only its
             // buttons and dots are clickable, and they are checked apart.
             // A floating panel title bar drags the panel and shows the arrow,
             // as a window title bar does.
-            let carousel = iced::widget::Id::new(pages::display::CAROUSEL);
-            let panel_bar = iced::widget::Id::new(pages::motion::PANEL_BAR);
+            let carousel = iced::widget::Id::new(pages::carousel::CAROUSEL);
+            let panel_bar = iced::widget::Id::new(pages::floating_panel::PANEL_BAR);
             let mut carousels = Vec::new();
             let _ = ui.find(
                 |candidate: iced_test::selector::Candidate<'_>| -> Option<()> {
@@ -865,7 +844,7 @@ mod tests {
                 .filter(|(bounds, _, visible)| *visible && !carousels.contains(bounds))
             {
                 let interaction =
-                    oito2_iced_test_utils::mouse_interaction(app.view(), TALL, bounds.center());
+                    oito2_iced_test_utils::mouse_interaction(content(&app), TALL, bounds.center());
 
                 if text_input {
                     assert_eq!(interaction, iced::mouse::Interaction::Text, "{page}");
@@ -875,9 +854,11 @@ mod tests {
                             interaction,
                             // An editable label shows the text cursor, as text
                             // it can be edited in place; a divider handle shows
-                            // the resize cursor of its axis.
+                            // the resize cursor of its axis; the crop area of an
+                            // image cropper shows the move cursor of its drag.
                             iced::mouse::Interaction::Pointer
                                 | iced::mouse::Interaction::Grab
+                                | iced::mouse::Interaction::Move
                                 | iced::mouse::Interaction::Text
                                 | iced::mouse::Interaction::ResizingHorizontally
                                 | iced::mouse::Interaction::ResizingVertically

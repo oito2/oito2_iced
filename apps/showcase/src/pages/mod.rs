@@ -13,790 +13,128 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-//! The component pages of the showcase: one page per family of widgets,
-//! each with its examples and the state they change.
+//! The pages of the showcase, one module per page; see
+//! [`crate::catalog`] for the shape every page follows.
 
-mod buttons;
-mod code;
-mod containers;
-mod data;
-pub mod display;
-mod entries;
-mod extras;
-mod files;
-mod groups;
-mod icons;
-mod layout;
-pub mod motion;
-mod navigation;
-mod overlays;
-mod pickers;
-mod progress;
-mod toggles;
+pub mod about;
+pub mod angle_slider;
+pub mod animated_icon;
+pub mod animations;
+pub mod autocomplete;
+pub mod avatar;
+pub mod banner;
+pub mod border_container;
+pub mod button;
+pub mod calendar;
+pub mod carousel;
+pub mod changelog;
+pub mod check_button;
+pub mod checkbox;
+pub mod checkbox_list_tile;
+pub mod choice_chip_bar;
+pub mod code_block;
+pub mod collections;
+pub mod color_disk;
+pub mod color_picker;
+pub mod commands;
+pub mod component_state;
+pub mod composition;
+pub mod context_menu_region;
+pub mod copy_button;
+pub mod date_time_entry;
+pub mod diagonal_clip;
+pub mod dialog;
+pub mod dialog_title_bar;
+pub mod download_trigger;
+pub mod draggable;
+pub mod editable_label;
+pub mod expandable;
+pub mod expansion_panel;
+pub mod file_upload;
+pub mod floating_panel;
+pub mod focus_border;
+pub mod format;
+pub mod forms;
+pub mod foundation;
+pub mod freedesktop_icons;
+pub mod getting_started;
+pub mod header_bar;
+pub mod highlighted_text;
+pub mod hover_card;
+pub mod icon_button;
+pub mod image_cropper;
+pub mod info_box;
+pub mod json_tree_view;
+pub mod list_box;
+pub mod list_tile;
+pub mod marquee;
+pub mod master_detail_page;
+pub mod material_theme;
+pub mod navigation_menu;
+pub mod navigation_page;
+pub mod navigation_rail;
+pub mod number_entry;
+pub mod option_button;
+pub mod page_indicator;
+pub mod pagination;
+pub mod paned_view;
+pub mod password_field;
+pub mod pin_entry;
+pub mod placeholder_icon;
+pub mod popover;
+pub mod popup_menu_button;
+pub mod progress_indicator;
+pub mod qr_code;
+pub mod radio;
+pub mod radio_button;
+pub mod rating;
+pub mod refs;
+pub mod scroll_area;
+pub mod scroll_view_undershoot;
+pub mod search_field;
+pub mod section;
+pub mod segment_group;
+pub mod segmented_entry;
+pub mod selectable_container;
+pub mod sheet;
+pub mod signature_pad;
+pub mod slider;
+pub mod split_button;
+pub mod splitter;
+pub mod steps;
+pub mod styling;
+pub mod swap;
+pub mod switch;
+pub mod switch_button;
+pub mod tab_bar;
+pub mod table_of_contents;
+pub mod tags_field;
+pub mod text_field;
+pub mod tile;
+pub mod timer_text;
+pub mod title_bar;
+pub mod toaster;
+pub mod toggle_button;
+pub mod toggle_group;
+pub mod tooltip;
+pub mod tour;
+pub mod tree_view;
+pub mod vertical_tabs;
+pub mod watermark;
 
-use std::fmt;
-use std::time::Instant;
+use iced::Element;
 
-use oito2_iced::collections::ListCollection;
-use oito2_iced::date::{Date, Time};
-use oito2_iced::icon::animated::Mode;
-use oito2_iced::widget::calendar::DateRange;
-use oito2_iced::widget::entries::Part;
-use oito2_iced::widget::floating_panel::PanelState;
-use oito2_iced::widget::list_box::SelectionChange;
-use oito2_iced::widget::splitter;
-use oito2_iced::widget::tour;
-use oito2_iced::widget::tree_view::TreeEvent;
-use oito2_iced_extras::image_cropper;
-use oito2_iced_extras::navigation_menu;
-use oito2_iced_extras::qr_code::ErrorLevel;
-use oito2_iced_extras::signature_pad;
-use oito2_iced_files::download;
-use oito2_iced_files::file::File;
-use oito2_iced_files::upload;
+use oito2_iced::Theme;
 
-use iced::font::Weight;
-use iced::widget::{column, container, text, text_editor};
-use iced::{Color, Element, Length, Point, Task};
+use crate::doc::{self, Context};
 
-use oito2_iced::l10n::Localizations;
-use oito2_iced::theme::container::Class as ContainerClass;
-use oito2_iced::theme::text::Class as TextClass;
-use oito2_iced::tokens::{spacing, typography};
-use oito2_iced::{Theme, font};
-
-/// A page of the showcase.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Page {
-    /// Theme, overlay, fonts and animation.
-    #[default]
-    Overview,
-    /// Buttons.
-    Buttons,
-    /// Check boxes, radios, switches, toggle buttons and list tiles.
-    Toggles,
-    /// Segment and toggle groups, choice chips and sliders.
-    Groups,
-    /// Text fields and the fields built on them.
-    Entries,
-    /// Containers, sections, tiles, banners and info boxes.
-    Containers,
-    /// Expandable sections, scroll areas, splitters and paned views.
-    Layout,
-    /// Tab bars, navigation rails and pages, and master-detail pages.
-    Navigation,
-    /// Menus, popovers, hover cards, autocomplete, sheets, dialogs and toasts.
-    Overlays,
-    /// Rating, range and angle sliders, codes, tags, dates, times and colors.
-    Pickers,
-    /// List boxes, trees, pagination, steps and tables of contents.
-    Data,
-    /// Avatars, timers, swaps, carousels, clips and draggable content.
-    Display,
-    /// Animated icons, marquees, floating panels and tours.
-    Motion,
-    /// Highlighted code blocks and a highlighted text editor.
-    Code,
-    /// Progress indicators.
-    Progress,
-    /// Icons.
-    Icons,
-    /// QR codes, the signature pad, the image cropper and the navigation
-    /// menu.
-    Extras,
-    /// File uploads, the drop zone and the download trigger.
-    Files,
-}
-
-impl Page {
-    /// Every page, in the order of the sidebar.
-    pub const ALL: [Page; 18] = [
-        Page::Overview,
-        Page::Buttons,
-        Page::Toggles,
-        Page::Groups,
-        Page::Entries,
-        Page::Containers,
-        Page::Layout,
-        Page::Navigation,
-        Page::Overlays,
-        Page::Pickers,
-        Page::Data,
-        Page::Display,
-        Page::Motion,
-        Page::Code,
-        Page::Progress,
-        Page::Icons,
-        Page::Extras,
-        Page::Files,
-    ];
-}
-
-impl fmt::Display for Page {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Page::Overview => "Overview",
-            Page::Buttons => "Buttons",
-            Page::Toggles => "Toggles",
-            Page::Groups => "Groups",
-            Page::Entries => "Entries",
-            Page::Containers => "Containers",
-            Page::Layout => "Layout",
-            Page::Navigation => "Navigation",
-            Page::Overlays => "Overlays",
-            Page::Pickers => "Pickers",
-            Page::Data => "Data",
-            Page::Display => "Display",
-            Page::Motion => "Motion",
-            Page::Code => "Code",
-            Page::Progress => "Progress",
-            Page::Icons => "Icons",
-            Page::Extras => "Extras",
-            Page::Files => "Files",
-        })
-    }
-}
-
-/// The labels of the choice chips.
-const CHIPS: [&str; 7] = [
-    "All",
-    "Images",
-    "Videos",
-    "Documents",
-    "Audio",
-    "Archives",
-    "Code",
-];
-
-/// The state the component pages change.
-#[derive(Debug)]
-pub struct Gallery {
-    presses: u32,
-    favorite: bool,
-    check: Option<bool>,
-    size: u8,
-    dark: bool,
-    bluetooth: bool,
-    layout: &'static str,
-    styles: Vec<&'static str>,
-    chips: Vec<bool>,
-    volume: f32,
-    selectable: bool,
-    banner: bool,
-    name: String,
-    email: String,
-    password: String,
-    search: String,
-    title_search: String,
-    title_search_active: bool,
-    copies: f64,
-    price: f64,
-    document_name: String,
-    expanded: bool,
-    panel: Vec<bool>,
-    split: splitter::State,
-    nested_split: splitter::State,
-    pane_size: f32,
-    tab: usize,
-    subtle_tab: usize,
-    vertical_tab: usize,
-    rail: usize,
-    destination: usize,
-    device: Option<usize>,
-    device_pane: f32,
-    sort: &'static str,
-    sort_open: bool,
-    hidden_files: bool,
-    fruits: Option<ListCollection<String>>,
-    fruit: Option<String>,
-    fruit_open: bool,
-    split_open: bool,
-    context_open: bool,
-    popover_open: bool,
-    cities: Option<ListCollection<String>>,
-    city: String,
-    today: Date,
-    rating: f32,
-    price_range: (f32, f32),
-    angle: f32,
-    pin: String,
-    tags: Vec<String>,
-    address: Vec<String>,
-    date: Option<Date>,
-    date_open: bool,
-    time: Option<Time>,
-    time_open: bool,
-    date_time: Option<(Date, Time)>,
-    date_time_open: Option<Part>,
-    trip: Option<DateRange>,
-    trip_open: bool,
-    day: Option<Date>,
-    disk: usize,
-    color: Color,
-    color_open: bool,
-    data: data::Data,
-    display: display::Display,
-    pub motion: motion::Motion,
-    code: code::Code,
-    extras: extras::Extras,
-    files: files::Files,
-}
-
-impl Default for Gallery {
-    fn default() -> Self {
-        Self {
-            presses: 0,
-            favorite: false,
-            check: Some(true),
-            size: 1,
-            dark: false,
-            bluetooth: true,
-            layout: "grid",
-            styles: vec!["b"],
-            chips: CHIPS.iter().map(|label| *label == "Images").collect(),
-            volume: 40.0,
-            selectable: false,
-            banner: false,
-            name: String::new(),
-            email: String::new(),
-            password: String::new(),
-            search: String::new(),
-            title_search: String::new(),
-            title_search_active: false,
-            copies: 1.0,
-            price: 1234.5,
-            document_name: "Project notes".to_owned(),
-            expanded: false,
-            panel: vec![false, true, false],
-            split: splitter::State::new(),
-            nested_split: splitter::State::new(),
-            pane_size: 240.0,
-            tab: 0,
-            subtle_tab: 0,
-            vertical_tab: 0,
-            rail: 0,
-            destination: 0,
-            device: Some(1),
-            device_pane: 240.0,
-            sort: overlays::SORTS[0],
-            sort_open: false,
-            hidden_files: false,
-            fruits: collection(&["Apple", "Banana", "Cherry", "Grape", "Mango"]),
-            fruit: None,
-            fruit_open: false,
-            split_open: false,
-            context_open: false,
-            popover_open: false,
-            cities: collection(&[
-                "Belo Horizonte",
-                "Brasília",
-                "Curitiba",
-                "Juiz de Fora",
-                "Salvador",
-                "Santos",
-                "São Paulo",
-            ]),
-            city: String::new(),
-            today: today(),
-            rating: 3.5,
-            price_range: (20.0, 70.0),
-            angle: 135.0,
-            pin: String::new(),
-            tags: vec!["iced".to_owned(), "rust".to_owned()],
-            address: ["192", "168", "0", "1"].map(str::to_owned).to_vec(),
-            date: None,
-            date_open: false,
-            time: Time::new(9, 30),
-            time_open: false,
-            date_time: None,
-            date_time_open: None,
-            trip: None,
-            trip_open: false,
-            day: None,
-            disk: 0,
-            color: pickers::DISKS[0].1,
-            color_open: false,
-            data: data::Data::default(),
-            display: display::Display::default(),
-            motion: motion::Motion::default(),
-            code: code::Code::default(),
-            extras: extras::Extras::default(),
-            files: files::Files::default(),
-        }
-    }
-}
-
-/// A change made on a component page.
-#[derive(Debug, Clone)]
-pub enum Message {
-    /// A button was pressed.
-    Press,
-    /// The favorite toggle button was pressed.
-    ToggleFavorite,
-    /// The check box changed.
-    Check(Option<bool>),
-    /// A size radio was chosen.
-    Size(Option<u8>),
-    /// The dark style switch changed.
-    Dark(bool),
-    /// The Bluetooth switch changed.
-    Bluetooth(bool),
-    /// A layout segment was chosen.
-    Layout(&'static str),
-    /// The text styles changed.
-    Styles(Vec<&'static str>),
-    /// A choice chip was pressed.
-    Chip(usize),
-    /// The volume slider moved.
-    Volume(f32),
-    /// The selectable container was toggled.
-    Selectable(bool),
-    /// The banner was pressed.
-    Banner,
-    /// The name field changed.
-    Name(String),
-    /// The email field changed.
-    Email(String),
-    /// The password field changed.
-    Password(String),
-    /// The search field changed.
-    Search(String),
-    /// The title search field changed.
-    TitleSearch(String),
-    /// The title search opened or closed.
-    TitleSearchActive(bool),
-    /// The copies entry changed.
-    Copies(f64),
-    /// The price entry changed.
-    Price(f64),
-    /// The document was renamed.
-    Rename(String),
-    /// The expandable section was opened or closed.
-    Expanded(bool),
-    /// A section of the expansion panel was opened or closed.
-    Panel(usize, bool),
-    /// The splitter moved.
-    Split(splitter::State),
-    /// The nested splitter moved.
-    NestedSplit(splitter::State),
-    /// The paned view divider moved.
-    PaneSize(f32),
-    /// A tab of the pill tab bar was chosen.
-    Tab(usize),
-    /// A tab of the subtle tab bar was chosen.
-    SubtleTab(usize),
-    /// A vertical tab was chosen.
-    VerticalTab(usize),
-    /// A rail destination was chosen.
-    Rail(usize),
-    /// A destination of the navigation page was chosen.
-    Destination(usize),
-    /// A device was chosen in the master-detail page, or the detail closed.
-    Device(Option<usize>),
-    /// The master pane of the master-detail page was resized.
-    DevicePane(f32),
-    /// A sort order was chosen.
-    Sort(&'static str),
-    /// The sort menu opened or closed.
-    SortOpen(bool),
-    /// The hidden files item changed.
-    HiddenFiles(bool),
-    /// A fruit was chosen.
-    Fruit(String),
-    /// The fruit select opened or closed.
-    FruitOpen(bool),
-    /// The split button menu opened or closed.
-    SplitOpen(bool),
-    /// The context menu opened or closed.
-    ContextOpen(bool),
-    /// The popover opened or closed.
-    PopoverOpen(bool),
-    /// The city field changed or a city was picked.
-    City(String),
-    /// A sheet should open: at the bottom when true, at the end otherwise.
-    OpenSheet(bool),
-    /// The dialog should open.
-    OpenDialog,
-    /// A toast should show.
-    ShowToast,
-    /// The command palette should open.
-    OpenPalette,
-    /// The rating changed.
-    Rating(f32),
-    /// The price range changed.
-    PriceRange(f32, f32),
-    /// The angle changed.
-    Angle(f32),
-    /// The PIN changed.
-    Pin(String),
-    /// The tags changed.
-    Tags(Vec<String>),
-    /// The address segments changed.
-    Address(Vec<String>),
-    /// The date entry changed.
-    Date(Option<Date>),
-    /// The calendar of the date entry opened or closed.
-    DateOpen(bool),
-    /// The time entry changed.
-    Time(Option<Time>),
-    /// The time popover opened or closed.
-    TimeOpen(bool),
-    /// The date and time entry changed.
-    DateTime(Option<(Date, Time)>),
-    /// A picker of the date and time entry opened, or both closed.
-    DateTimeOpen(Option<Part>),
-    /// The trip range was picked.
-    Trip(DateRange),
-    /// The trip picker opened or closed.
-    TripOpen(bool),
-    /// A day of the calendar was picked.
-    Day(Date),
-    /// A color disk was pressed.
-    Disk(usize),
-    /// The color changed.
-    Color(Color),
-    /// The color picker button opened or closed.
-    ColorOpen(bool),
-    /// The fruit list box selection changed.
-    Fruits(SelectionChange),
-    /// A fruit of the list box was activated.
-    FruitActivated(String),
-    /// The file tree changed.
-    Files(TreeEvent),
-    /// The JSON tree changed.
-    Json(TreeEvent),
-    /// A page of the pagination was chosen.
-    DataPage(u32),
-    /// A page size was chosen.
-    PageSize(u32),
-    /// The page size menu opened or closed.
-    PageSizeOpen(bool),
-    /// A step was chosen.
-    Step(usize),
-    /// An entry of the table of contents was picked.
-    TocPick(usize),
-    /// The document scrolled to another section.
-    Section(usize),
-    /// A timer button was pressed.
-    Timer(display::TimerAction),
-    /// The countdown completed.
-    TimerTick(Instant),
-    /// The play swaps were pressed.
-    Playing(bool),
-    /// The carousel asked for a page.
-    Slide(usize),
-    /// A page indicator dot was chosen.
-    Indicator(usize),
-    /// The draggable note moved.
-    Note(Point),
-    /// A play mode of the animated icons was chosen.
-    IconMode(Mode),
-    /// The floating panel moved, resized, minimized or maximized.
-    FloatingPanel(PanelState),
-    /// The floating panel opened or closed.
-    PanelOpen(bool),
-    /// The tour should start.
-    StartTour,
-    /// The tour moved or ended.
-    Tour(tour::Event),
-    /// A code sample was chosen.
-    CodeSample(code::Sample),
-    /// The line numbers switch changed.
-    LineNumbers(bool),
-    /// The code block copied its code.
-    CodeCopied,
-    /// The highlighted editor was edited.
-    CodeEdit(text_editor::Action),
-    /// A QR code data example was chosen.
-    QrData(usize),
-    /// A QR code error correction level was chosen.
-    QrLevel(ErrorLevel),
-    /// The rounded QR modules switch changed.
-    QrRounded(bool),
-    /// The signature pad changed.
-    Signature(signature_pad::Event),
-    /// A crop box shape was chosen.
-    CropShape(extras::CropShape),
-    /// The image cropper changed.
-    Cropper(image_cropper::Event),
-    /// The navigation menu opened or closed a panel.
-    Menu(navigation_menu::Event),
-    /// A navigation menu link was chosen.
-    MenuSection(usize),
-    /// A link of a navigation menu panel was chosen.
-    MenuLink(&'static str),
-    /// The image upload changed.
-    Images(upload::Event),
-    /// The document upload changed.
-    Document(upload::Event),
-    /// The drop zone asked for the file chooser.
-    ChooseFiles,
-    /// The file chooser closed with these files.
-    FilesChosen(Vec<File>),
-    /// The download trigger was pressed.
-    Download,
-    /// The download finished, was canceled or failed.
-    Saved(Result<bool, download::Error>),
-}
-
-/// Today's date in UTC, or 2026-01-01 when the clock is before 1970.
-fn today() -> Date {
-    let days = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs() / 86_400)
-        .unwrap_or_default();
-
-    i64::try_from(days)
-        .ok()
-        .filter(|days| *days > 0)
-        .and_then(Date::from_unix_days)
-        .or_else(|| Date::new(2026, 1, 1))
-        .unwrap_or(Date::MIN)
-}
-
-/// A collection of the `labels`, valued by themselves; `None` when two
-/// labels repeat.
-fn collection(labels: &[&str]) -> Option<ListCollection<String>> {
-    ListCollection::new(labels.iter().map(|label| (*label).to_owned())).ok()
-}
-
-impl Gallery {
-    /// Applies a change, returning the task it starts.
-    pub fn update(&mut self, message: Message) -> Task<Message> {
-        match message {
-            Message::Press => self.presses += 1,
-            Message::ToggleFavorite => self.favorite = !self.favorite,
-            Message::Check(value) => self.check = value,
-            Message::Size(size) => {
-                if let Some(size) = size {
-                    self.size = size;
-                }
-            }
-            Message::Dark(dark) => self.dark = dark,
-            Message::Bluetooth(on) => self.bluetooth = on,
-            Message::Layout(layout) => self.layout = layout,
-            Message::Styles(styles) => self.styles = styles,
-            Message::Chip(index) => {
-                if let Some(selected) = self.chips.get_mut(index) {
-                    *selected = !*selected;
-                }
-            }
-            Message::Volume(volume) => self.volume = volume,
-            Message::Selectable(selected) => self.selectable = selected,
-            Message::Banner => self.banner = !self.banner,
-            Message::Name(name) => self.name = name,
-            Message::Email(email) => self.email = email,
-            Message::Password(password) => self.password = password,
-            Message::Search(search) => self.search = search,
-            Message::TitleSearch(search) => self.title_search = search,
-            Message::TitleSearchActive(active) => {
-                self.title_search_active = active;
-                if !active {
-                    self.title_search.clear();
-                }
-            }
-            Message::Copies(copies) => self.copies = copies,
-            Message::Price(price) => self.price = price,
-            Message::Rename(name) => self.document_name = name,
-            Message::Expanded(expanded) => self.expanded = expanded,
-            Message::Panel(index, open) => {
-                if let Some(section) = self.panel.get_mut(index) {
-                    *section = open;
-                }
-            }
-            Message::Split(state) => self.split = state,
-            Message::NestedSplit(state) => self.nested_split = state,
-            Message::PaneSize(size) => self.pane_size = size,
-            Message::Tab(index) => self.tab = index,
-            Message::SubtleTab(index) => self.subtle_tab = index,
-            Message::VerticalTab(index) => self.vertical_tab = index,
-            Message::Rail(index) => self.rail = index,
-            Message::Destination(index) => self.destination = index,
-            Message::Device(device) => self.device = device,
-            Message::DevicePane(size) => self.device_pane = size,
-            Message::Sort(sort) => self.sort = sort,
-            Message::SortOpen(open) => self.sort_open = open,
-            Message::HiddenFiles(shown) => self.hidden_files = shown,
-            Message::Fruit(fruit) => self.fruit = Some(fruit),
-            Message::FruitOpen(open) => self.fruit_open = open,
-            Message::SplitOpen(open) => self.split_open = open,
-            Message::ContextOpen(open) => self.context_open = open,
-            Message::PopoverOpen(open) => self.popover_open = open,
-            Message::City(city) => self.city = city,
-            Message::Rating(value) => self.rating = value,
-            Message::PriceRange(start, end) => self.price_range = (start, end),
-            Message::Angle(angle) => self.angle = angle,
-            Message::Pin(pin) => self.pin = pin,
-            Message::Tags(tags) => self.tags = tags,
-            Message::Address(address) => self.address = address,
-            Message::Date(date) => self.date = date,
-            Message::DateOpen(open) => self.date_open = open,
-            Message::Time(time) => self.time = time,
-            Message::TimeOpen(open) => self.time_open = open,
-            Message::DateTime(value) => self.date_time = value,
-            Message::DateTimeOpen(part) => self.date_time_open = part,
-            Message::Trip(range) => self.trip = Some(range),
-            Message::TripOpen(open) => self.trip_open = open,
-            Message::Day(day) => self.day = Some(day),
-            Message::Disk(index) => {
-                self.disk = index;
-                if let Some((_, color)) = pickers::DISKS.get(index) {
-                    self.color = *color;
-                }
-            }
-            Message::Color(color) => self.color = color,
-            Message::ColorOpen(open) => self.color_open = open,
-            Message::Fruits(change) => {
-                if let Some(fruits) = &mut self.data.fruits {
-                    change.apply(fruits);
-                }
-            }
-            Message::Files(event) => {
-                if let Some(files) = &self.data.files {
-                    self.data.files_state.apply(files, event);
-                }
-            }
-            Message::Json(event) => self.data.json_state.apply(&self.data.json, event),
-            Message::DataPage(page) => self.data.page = page,
-            Message::PageSize(size) => {
-                self.data.page_size = size;
-                self.data.page_size_open = false;
-            }
-            Message::PageSizeOpen(open) => self.data.page_size_open = open,
-            Message::Step(step) => self.data.step = step,
-            Message::Section(section) => self.data.section = section,
-            Message::Timer(action) => self.display.timer(action, Instant::now()),
-            Message::TimerTick(at) => {
-                self.display.timer.tick(at);
-            }
-            Message::Playing(playing) => self.display.playing = playing,
-            Message::Slide(page) => self.display.carousel.go_to(page),
-            Message::Indicator(page) => self.display.indicator = page,
-            Message::Note(point) => self.display.note = point,
-            Message::IconMode(mode) => self.motion.mode = mode,
-            Message::FloatingPanel(state) => self.motion.panel = state,
-            Message::PanelOpen(open) => self.motion.panel_open = open,
-            Message::StartTour => {
-                // The start button is also the target of the last step, so a
-                // press during the tour only moves it on.
-                if !self.motion.tour.is_active() {
-                    self.motion.tour.start();
-                }
-            }
-            Message::Tour(event) => {
-                if let Some(completed) = self.motion.tour.apply(event) {
-                    self.motion.tour_result = Some(completed);
-                }
-            }
-            Message::CodeSample(sample) => self.code.sample = sample,
-            Message::LineNumbers(on) => self.code.line_numbers = on,
-            Message::CodeCopied => self.code.copies += 1,
-            Message::CodeEdit(action) => self.code.editor.perform(action),
-            Message::QrData(index) => self.extras.qr_data = index,
-            Message::QrLevel(level) => self.extras.qr_level = level,
-            Message::QrRounded(rounded) => self.extras.qr_rounded = rounded,
-            Message::Signature(event) => self.extras.signature.apply(event),
-            Message::CropShape(shape) => self.extras.set_shape(shape),
-            Message::Cropper(event) => self.extras.crop.apply(event),
-            Message::Menu(event) => self.extras.menu.apply(event),
-            Message::MenuSection(section) => {
-                self.extras.section = section;
-                self.extras.showing = extras::SECTIONS.get(section).copied().unwrap_or_default();
-            }
-            Message::MenuLink(link) => {
-                self.extras.showing = link;
-                self.extras.menu.apply(navigation_menu::Event::Closed);
-            }
-            message @ (Message::Images(_)
-            | Message::Document(_)
-            | Message::ChooseFiles
-            | Message::FilesChosen(_)
-            | Message::Download
-            | Message::Saved(_)) => return self.files.update(message),
-            Message::FruitActivated(fruit) => self.data.opened = Some(fruit),
-            Message::TocPick(_) => {}
-            Message::OpenSheet(_)
-            | Message::OpenDialog
-            | Message::ShowToast
-            | Message::OpenPalette => {}
-        }
-
-        Task::none()
-    }
-
-    /// The task that scrolls the document of the data page to the section
-    /// of table of contents entry `index`.
-    pub fn scroll_to_section<T: Send + 'static>(&self, index: usize) -> Task<T> {
-        self.data
-            .entries
-            .get(index)
-            .map_or_else(Task::none, |entry| {
-                oito2_iced::widget::table_of_contents::scroll_to(
-                    data::DOCUMENT,
-                    entry.target.clone(),
-                )
-            })
-    }
-
-    /// The content of a component page; `None` for the overview, which the
-    /// application draws itself.
-    pub fn view<'a>(
-        &'a self,
-        page: Page,
-        localizations: &Localizations,
-    ) -> Option<Element<'a, Message, Theme>> {
-        match page {
-            Page::Overview => None,
-            Page::Buttons => Some(buttons::view(self, localizations)),
-            Page::Toggles => Some(toggles::view(self)),
-            Page::Groups => Some(groups::view(self, localizations)),
-            Page::Entries => Some(entries::view(self, localizations)),
-            Page::Containers => Some(containers::view(self)),
-            Page::Layout => Some(layout::view(self)),
-            Page::Navigation => Some(navigation::view(self, localizations)),
-            Page::Overlays => Some(overlays::view(self)),
-            Page::Pickers => Some(pickers::view(self, localizations)),
-            Page::Data => Some(data::view(self, localizations)),
-            Page::Display => Some(display::view(self, localizations)),
-            Page::Motion => Some(motion::view(self, localizations)),
-            Page::Code => Some(code::view(self, localizations)),
-            Page::Progress => Some(progress::view(self)),
-            Page::Icons => Some(icons::view()),
-            Page::Extras => Some(extras::view(self, localizations)),
-            Page::Files => Some(files::view(self, localizations)),
-        }
-    }
-}
-
-/// A titled card holding one example.
-fn card<'a, Message: 'a>(
-    title: &'a str,
-    content: impl Into<Element<'a, Message, Theme>>,
-) -> Element<'a, Message, Theme> {
-    container(
-        column![
-            text(title).font(font::inter(Weight::Semibold)),
-            content.into()
-        ]
-        .spacing(spacing::MD),
-    )
-    .class(ContainerClass::Card)
-    .padding(spacing::LG)
-    .width(Length::Fill)
-    .into()
-}
-
-/// A page: its title, a one-line description and its cards.
-fn page<'a, Message: 'a>(
+/// A page that shows the Markdown `document` under `title` and
+/// `description`.
+fn document<'a, Message: Clone + 'a>(
     title: &'a str,
     description: &'a str,
-    cards: impl IntoIterator<Item = Element<'a, Message, Theme>>,
+    ctx: &Context,
+    document: &'static str,
 ) -> Element<'a, Message, Theme> {
-    column![
-        oito2_iced::widget::styled_text(title, typography::HEADLINE_SMALL),
-        text(description).class(TextClass::Variant),
-    ]
-    .extend(cards)
-    .spacing(spacing::LG)
-    .into()
+    doc::page(title, description, doc::markdown(ctx, document))
 }
