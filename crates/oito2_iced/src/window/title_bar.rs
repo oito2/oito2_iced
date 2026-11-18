@@ -17,7 +17,7 @@
 
 use iced::widget::text::{self, LineHeight, Wrapping};
 use iced::widget::{Row, Space, column, container, mouse_area};
-use iced::{Alignment, Length};
+use iced::{Alignment, Length, Padding};
 
 use super::control::{self, Labels};
 use super::{Action, WindowState};
@@ -62,6 +62,7 @@ pub struct TitleBar<'a, Message> {
     center_title: Option<bool>,
     leading_inset: f32,
     height: f32,
+    radius: iced::border::Radius,
     on_action: Box<dyn Fn(Action) -> Message + 'a>,
 }
 
@@ -108,6 +109,7 @@ impl<'a, Message> TitleBar<'a, Message> {
             center_title: None,
             leading_inset: 0.0,
             height: sizes::TITLE_BAR_HEIGHT,
+            radius: iced::border::Radius::default(),
             on_action: Box::new(on_action),
         }
     }
@@ -204,6 +206,14 @@ impl<'a, Message> TitleBar<'a, Message> {
         self.height = height;
         self
     }
+
+    /// Rounds the corners of the bar background by `radius`, for a bar
+    /// at the top of a rounded surface; defaults to square corners.
+    #[must_use]
+    pub fn radius(mut self, radius: impl Into<iced::border::Radius>) -> Self {
+        self.radius = radius.into();
+        self
+    }
 }
 
 impl<'a, Message> From<TitleBar<'a, Message>> for Element<'a, Message>
@@ -223,6 +233,7 @@ where
             center_title,
             leading_inset,
             height,
+            radius,
             on_action,
         } = bar;
 
@@ -317,17 +328,30 @@ where
                 .height(content_height)
                 .align_y(Alignment::Center)
                 .clip(true),
-            container(Space::new().width(Length::Fill).height(BORDER_WIDTH)).style(
-                |theme: &Theme| container::Style {
-                    background: Some(theme.roles().outline_variant.into()),
-                    ..container::Style::default()
-                }
-            ),
+            // The line stops short of rounded bottom corners, so it stays
+            // inside the rounded background.
+            container(
+                container(Space::new().width(Length::Fill).height(BORDER_WIDTH)).style(
+                    |theme: &Theme| container::Style {
+                        background: Some(theme.roles().outline_variant.into()),
+                        ..container::Style::default()
+                    }
+                )
+            )
+            .padding(Padding {
+                left: radius.bottom_left,
+                right: radius.bottom_right,
+                ..Padding::ZERO
+            }),
         ];
 
         mouse_area(
             container(bar)
-                .class(ContainerClass::TitleBar)
+                .style(move |theme: &Theme| {
+                    let mut style = container::Catalog::style(theme, &ContainerClass::TitleBar);
+                    style.border.radius = radius;
+                    style
+                })
                 .width(Length::Fill)
                 .height(height),
         )

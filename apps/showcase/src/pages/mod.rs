@@ -24,6 +24,7 @@ mod entries;
 mod groups;
 mod icons;
 mod layout;
+pub mod motion;
 mod navigation;
 mod overlays;
 mod pickers;
@@ -35,10 +36,13 @@ use std::time::Instant;
 
 use oito2_iced::collections::ListCollection;
 use oito2_iced::date::{Date, Time};
+use oito2_iced::icon::animated::Mode;
 use oito2_iced::widget::calendar::DateRange;
 use oito2_iced::widget::entries::Part;
+use oito2_iced::widget::floating_panel::PanelState;
 use oito2_iced::widget::list_box::SelectionChange;
 use oito2_iced::widget::splitter;
+use oito2_iced::widget::tour;
 use oito2_iced::widget::tree_view::TreeEvent;
 
 use iced::font::Weight;
@@ -79,6 +83,8 @@ pub enum Page {
     Data,
     /// Avatars, timers, swaps, carousels, clips and draggable content.
     Display,
+    /// Animated icons, marquees, floating panels and tours.
+    Motion,
     /// Progress indicators.
     Progress,
     /// Icons.
@@ -87,7 +93,7 @@ pub enum Page {
 
 impl Page {
     /// Every page, in the order of the sidebar.
-    pub const ALL: [Page; 14] = [
+    pub const ALL: [Page; 15] = [
         Page::Overview,
         Page::Buttons,
         Page::Toggles,
@@ -100,6 +106,7 @@ impl Page {
         Page::Pickers,
         Page::Data,
         Page::Display,
+        Page::Motion,
         Page::Progress,
         Page::Icons,
     ];
@@ -120,6 +127,7 @@ impl fmt::Display for Page {
             Page::Pickers => "Pickers",
             Page::Data => "Data",
             Page::Display => "Display",
+            Page::Motion => "Motion",
             Page::Progress => "Progress",
             Page::Icons => "Icons",
         })
@@ -205,6 +213,7 @@ pub struct Gallery {
     color_open: bool,
     data: data::Data,
     display: display::Display,
+    pub motion: motion::Motion,
 }
 
 impl Default for Gallery {
@@ -283,6 +292,7 @@ impl Default for Gallery {
             color_open: false,
             data: data::Data::default(),
             display: display::Display::default(),
+            motion: motion::Motion::default(),
         }
     }
 }
@@ -450,6 +460,16 @@ pub enum Message {
     Indicator(usize),
     /// The draggable note moved.
     Note(Point),
+    /// A play mode of the animated icons was chosen.
+    IconMode(Mode),
+    /// The floating panel moved, resized, minimized or maximized.
+    FloatingPanel(PanelState),
+    /// The floating panel opened or closed.
+    PanelOpen(bool),
+    /// The tour should start.
+    StartTour,
+    /// The tour moved or ended.
+    Tour(tour::Event),
 }
 
 /// Today's date in UTC, or 2026-01-01 when the clock is before 1970.
@@ -586,6 +606,21 @@ impl Gallery {
             Message::Slide(page) => self.display.carousel.go_to(page),
             Message::Indicator(page) => self.display.indicator = page,
             Message::Note(point) => self.display.note = point,
+            Message::IconMode(mode) => self.motion.mode = mode,
+            Message::FloatingPanel(state) => self.motion.panel = state,
+            Message::PanelOpen(open) => self.motion.panel_open = open,
+            Message::StartTour => {
+                // The start button is also the target of the last step, so a
+                // press during the tour only moves it on.
+                if !self.motion.tour.is_active() {
+                    self.motion.tour.start();
+                }
+            }
+            Message::Tour(event) => {
+                if let Some(completed) = self.motion.tour.apply(event) {
+                    self.motion.tour_result = Some(completed);
+                }
+            }
             Message::FruitActivated(fruit) => self.data.opened = Some(fruit),
             Message::TocPick(_) => {}
             Message::OpenSheet(_)
@@ -629,6 +664,7 @@ impl Gallery {
             Page::Pickers => Some(pickers::view(self, localizations)),
             Page::Data => Some(data::view(self, localizations)),
             Page::Display => Some(display::view(self, localizations)),
+            Page::Motion => Some(motion::view(self, localizations)),
             Page::Progress => Some(progress::view(self)),
             Page::Icons => Some(icons::view()),
         }

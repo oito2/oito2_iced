@@ -441,7 +441,10 @@ impl Showcase {
                 .width(Length::Fill),
         ];
 
-        let window = column![header, body];
+        let window =
+            oito2_iced::widget::tour::host(column![header, body], &self.gallery.motion.tour)
+                .on_event(|event| Message::Gallery(pages::Message::Tour(event)))
+                .localizations(&localizations);
 
         let sheet = self
             .sheet
@@ -836,7 +839,10 @@ mod tests {
 
             // A carousel takes the focus as a whole for its keys; only its
             // buttons and dots are clickable, and they are checked apart.
+            // A floating panel title bar drags the panel and shows the arrow,
+            // as a window title bar does.
             let carousel = iced::widget::Id::new(pages::display::CAROUSEL);
+            let panel_bar = iced::widget::Id::new(pages::motion::PANEL_BAR);
             let mut carousels = Vec::new();
             let _ = ui.find(
                 |candidate: iced_test::selector::Candidate<'_>| -> Option<()> {
@@ -845,7 +851,7 @@ mod tests {
                         bounds,
                         ..
                     } = candidate
-                        && *id == carousel
+                        && (*id == carousel || *id == panel_bar)
                     {
                         carousels.push(bounds);
                     }

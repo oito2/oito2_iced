@@ -107,6 +107,17 @@ pub fn ease_in_out(t: f32) -> f32 {
     cubic(0.42, 0.0, 0.58, 1.0, t)
 }
 
+/// The Material ease-out curve: control points (0.25, 0.1) and (0.25, 1).
+pub fn ease_out(t: f32) -> f32 {
+    cubic(0.25, 0.1, 0.25, 1.0, t)
+}
+
+/// The ease-out-back curve: control points (0.175, 0.885) and
+/// (0.32, 1.275); it overshoots 1 before it settles.
+pub fn ease_out_back(t: f32) -> f32 {
+    cubic(0.175, 0.885, 0.32, 1.275, t)
+}
+
 /// A unit cubic Bézier from (0, 0) to (1, 1) with control points (a, b) and
 /// (c, d), evaluated at x = `t` by bisection with an error below 0.001.
 fn cubic(a: f32, b: f32, c: f32, d: f32, t: f32) -> f32 {
@@ -147,10 +158,22 @@ mod tests {
 
     #[test]
     fn curves_start_at_zero_and_end_at_one() {
-        for curve in [emphasized, ease_out_cubic, ease_in_out_cubic, ease_in_out] {
+        for curve in [
+            emphasized,
+            ease_out_cubic,
+            ease_in_out_cubic,
+            ease_in_out,
+            ease_out,
+            ease_out_back,
+        ] {
             assert_eq!(curve(0.0), 0.0);
             assert_eq!(curve(1.0), 1.0);
         }
+    }
+
+    #[test]
+    fn ease_out_back_overshoots() {
+        assert!((0..100).any(|step| ease_out_back(step as f32 / 100.0) > 1.05));
     }
 
     #[test]

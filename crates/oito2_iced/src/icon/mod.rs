@@ -28,6 +28,7 @@
 //! # }
 //! ```
 
+pub mod animated;
 mod freedesktop;
 #[cfg(feature = "svg")]
 mod glyph;

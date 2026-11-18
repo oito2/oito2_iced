@@ -882,7 +882,7 @@ where
 /// strips that narrow toward the tip: first its outline in the border color,
 /// then its fill in the panel background, which also covers the panel border
 /// where the arrow joins it.
-fn draw_arrow<Renderer>(
+pub(crate) fn draw_arrow<Renderer>(
     renderer: &mut Renderer,
     bounds: Rectangle,
     placed: Placed,
