@@ -1,0 +1,24 @@
+[package]
+name = "oito2_iced_files"
+description = "File widgets for the OITO2 Iced design system: drop zone, file upload and download trigger."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+iced = { workspace = true, features = ["advanced", "canvas", "image", "x11", "wayland", "thread-pool"] }
+oito2_iced.workspace = true
+rfd.workspace = true
+
+[dev-dependencies]
+iced = { workspace = true, features = ["advanced", "x11", "wayland", "tiny-skia"] }
+iced_test.workspace = true
+oito2_iced_test_utils.workspace = true
+
+[lints]
+workspace = true

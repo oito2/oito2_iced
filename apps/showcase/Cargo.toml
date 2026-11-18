@@ -11,8 +11,12 @@ homepage.workspace = true
 publish = false
 
 [dependencies]
+image.workspace = true
 oito2_iced.workspace = true
+oito2_iced_extras.workspace = true
+oito2_iced_files.workspace = true
 oito2_iced_settings.workspace = true
+oito2_iced_syntax.workspace = true
 oito2_iced_themes.workspace = true
 iced = { workspace = true, features = ["advanced", "wgpu", "tiny-skia", "thread-pool", "linux-theme-detection", "x11", "wayland"] }
 

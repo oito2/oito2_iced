@@ -432,10 +432,8 @@ impl<Message> Widget<Message, Theme, iced::Renderer> for AnimatedIcon {
             color,
         );
 
-        let geometry = frame.into_geometry();
-
         renderer.with_translation(bounds.position() - Point::ORIGIN, |renderer| {
-            renderer.draw_geometry(geometry);
+            renderer.draw_geometry(frame.into_geometry());
         });
     }
 }

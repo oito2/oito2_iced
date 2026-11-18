@@ -1562,9 +1562,9 @@ impl<Message: Clone> Widget<Message, Theme, iced::Renderer> for Layer<'_, Messag
                 },
             );
 
-            let scrim = frame.into_geometry();
-
-            renderer.with_translation(origin, |renderer| renderer.draw_geometry(scrim));
+            renderer.with_translation(origin, |renderer| {
+                renderer.draw_geometry(frame.into_geometry());
+            });
         });
 
         // The card goes on a layer of its own, above the scrim.

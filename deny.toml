@@ -14,12 +14,14 @@ targets = [
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "deny"
 # Unmaintained (not vulnerable) crates that reach the graph only through
-# Iced 0.14 and its renderers. Reassess at each Iced release.
+# Iced 0.14 and its renderers, or through syntect. Reassess at each Iced
+# release.
 ignore = [
     { id = "RUSTSEC-2024-0370", reason = "proc-macro-error: pulled by glib-macros 0.18 through oito2_settings (same pin as oito2_rs); no safe upgrade" },
     { id = "RUSTSEC-2024-0436", reason = "paste: proc macro of metal, pulled by wgpu-hal 27 (iced_wgpu)" },
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser: font parsing of fontdb, pulled by cosmic-text 0.15 (iced)" },
     { id = "RUSTSEC-2026-0206", reason = "rustybuzz: text shaping of usvg, pulled by resvg 0.45 (iced svg feature)" },
+    { id = "RUSTSEC-2025-0141", reason = "bincode: loads the packed syntaxes of syntect 5.3 (oito2_iced_syntax, as in iced_highlighter); no release without it" },
     { id = "RUSTSEC-2026-0370", reason = "zvariant: pulled by zbus 5 through mundy 0.2 (iced_winit theme detection)" },
     { id = "RUSTSEC-2026-0371", reason = "zbus_names: pulled by zbus 5 through mundy 0.2 (iced_winit theme detection)" },
     { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: pulled by zbus 5 through mundy 0.2 (iced_winit theme detection)" },

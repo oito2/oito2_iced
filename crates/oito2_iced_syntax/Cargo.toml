@@ -1,0 +1,26 @@
+[package]
+name = "oito2_iced_syntax"
+description = "Syntax highlighting for the OITO2 Iced design system: code blocks and a text editor highlighter in the theme's syntax colors."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+iced = { workspace = true, features = ["advanced", "x11", "wayland", "thread-pool"] }
+oito2_iced.workspace = true
+syntect.workspace = true
+two-face.workspace = true
+
+[dev-dependencies]
+iced = { workspace = true, features = ["advanced", "x11", "wayland", "tiny-skia"] }
+iced_test.workspace = true
+oito2_iced_test_utils.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -51,6 +51,7 @@ fn main() -> iced::Result {
 
     font::INTER_FONTS
         .into_iter()
+        .chain(oito2_iced_syntax::font::JETBRAINS_MONO_FONTS)
         .fold(application, |application, bytes| application.font(bytes))
         .default_font(font::INTER)
         .window(window::Settings {
@@ -247,7 +248,7 @@ impl Showcase {
             Message::Gallery(pages::Message::TocPick(index)) => {
                 return self.gallery.scroll_to_section(index);
             }
-            Message::Gallery(message) => self.gallery.update(message),
+            Message::Gallery(message) => return self.gallery.update(message).map(Message::Gallery),
             Message::Key(event) => {
                 if let Some(chord) = KeyChord::from_keyboard_event(&event)
                     && let Some(command) = self

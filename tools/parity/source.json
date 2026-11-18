@@ -28,6 +28,14 @@
     {
       "file": "schemes.json",
       "target": "crates/oito2_iced_themes/tests/fixtures/parity"
+    },
+    {
+      "file": "syntax.json",
+      "target": "crates/oito2_iced_syntax/tests/fixtures/parity"
+    },
+    {
+      "file": "qr.json",
+      "target": "crates/oito2_iced_extras/tests/fixtures/parity"
     }
   ],
   "repository": "oito2/oito2_ui"

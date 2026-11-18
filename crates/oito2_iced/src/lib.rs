@@ -21,7 +21,7 @@
 //!   accent, light and dark, standard and high contrast) and implements the
 //!   style catalog of every native Iced widget; [`theme`] holds the classes.
 //! - [`tokens`] holds radii, spacing, sizes, accents, palettes and the type
-//!   scale; [`font`] the embedded Inter and JetBrains Mono fonts.
+//!   scale; [`font`] the embedded Inter fonts.
 //! - [`icon`] holds every Lucide icon and the freedesktop.org icon names;
 //!   [`density`] the pointer or touch sizes the widgets lay out with.
 //! - [`focus`] gives keyboard focus to any element, moves it with Tab, the

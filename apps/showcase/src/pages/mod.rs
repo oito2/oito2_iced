@@ -17,10 +17,13 @@
 //! each with its examples and the state they change.
 
 mod buttons;
+mod code;
 mod containers;
 mod data;
 pub mod display;
 mod entries;
+mod extras;
+mod files;
 mod groups;
 mod icons;
 mod layout;
@@ -44,9 +47,16 @@ use oito2_iced::widget::list_box::SelectionChange;
 use oito2_iced::widget::splitter;
 use oito2_iced::widget::tour;
 use oito2_iced::widget::tree_view::TreeEvent;
+use oito2_iced_extras::image_cropper;
+use oito2_iced_extras::navigation_menu;
+use oito2_iced_extras::qr_code::ErrorLevel;
+use oito2_iced_extras::signature_pad;
+use oito2_iced_files::download;
+use oito2_iced_files::file::File;
+use oito2_iced_files::upload;
 
 use iced::font::Weight;
-use iced::widget::{column, container, text};
+use iced::widget::{column, container, text, text_editor};
 use iced::{Color, Element, Length, Point, Task};
 
 use oito2_iced::l10n::Localizations;
@@ -85,15 +95,22 @@ pub enum Page {
     Display,
     /// Animated icons, marquees, floating panels and tours.
     Motion,
+    /// Highlighted code blocks and a highlighted text editor.
+    Code,
     /// Progress indicators.
     Progress,
     /// Icons.
     Icons,
+    /// QR codes, the signature pad, the image cropper and the navigation
+    /// menu.
+    Extras,
+    /// File uploads, the drop zone and the download trigger.
+    Files,
 }
 
 impl Page {
     /// Every page, in the order of the sidebar.
-    pub const ALL: [Page; 15] = [
+    pub const ALL: [Page; 18] = [
         Page::Overview,
         Page::Buttons,
         Page::Toggles,
@@ -107,8 +124,11 @@ impl Page {
         Page::Data,
         Page::Display,
         Page::Motion,
+        Page::Code,
         Page::Progress,
         Page::Icons,
+        Page::Extras,
+        Page::Files,
     ];
 }
 
@@ -128,8 +148,11 @@ impl fmt::Display for Page {
             Page::Data => "Data",
             Page::Display => "Display",
             Page::Motion => "Motion",
+            Page::Code => "Code",
             Page::Progress => "Progress",
             Page::Icons => "Icons",
+            Page::Extras => "Extras",
+            Page::Files => "Files",
         })
     }
 }
@@ -214,6 +237,9 @@ pub struct Gallery {
     data: data::Data,
     display: display::Display,
     pub motion: motion::Motion,
+    code: code::Code,
+    extras: extras::Extras,
+    files: files::Files,
 }
 
 impl Default for Gallery {
@@ -293,6 +319,9 @@ impl Default for Gallery {
             data: data::Data::default(),
             display: display::Display::default(),
             motion: motion::Motion::default(),
+            code: code::Code::default(),
+            extras: extras::Extras::default(),
+            files: files::Files::default(),
         }
     }
 }
@@ -470,6 +499,44 @@ pub enum Message {
     StartTour,
     /// The tour moved or ended.
     Tour(tour::Event),
+    /// A code sample was chosen.
+    CodeSample(code::Sample),
+    /// The line numbers switch changed.
+    LineNumbers(bool),
+    /// The code block copied its code.
+    CodeCopied,
+    /// The highlighted editor was edited.
+    CodeEdit(text_editor::Action),
+    /// A QR code data example was chosen.
+    QrData(usize),
+    /// A QR code error correction level was chosen.
+    QrLevel(ErrorLevel),
+    /// The rounded QR modules switch changed.
+    QrRounded(bool),
+    /// The signature pad changed.
+    Signature(signature_pad::Event),
+    /// A crop box shape was chosen.
+    CropShape(extras::CropShape),
+    /// The image cropper changed.
+    Cropper(image_cropper::Event),
+    /// The navigation menu opened or closed a panel.
+    Menu(navigation_menu::Event),
+    /// A navigation menu link was chosen.
+    MenuSection(usize),
+    /// A link of a navigation menu panel was chosen.
+    MenuLink(&'static str),
+    /// The image upload changed.
+    Images(upload::Event),
+    /// The document upload changed.
+    Document(upload::Event),
+    /// The drop zone asked for the file chooser.
+    ChooseFiles,
+    /// The file chooser closed with these files.
+    FilesChosen(Vec<File>),
+    /// The download trigger was pressed.
+    Download,
+    /// The download finished, was canceled or failed.
+    Saved(Result<bool, download::Error>),
 }
 
 /// Today's date in UTC, or 2026-01-01 when the clock is before 1970.
@@ -494,8 +561,8 @@ fn collection(labels: &[&str]) -> Option<ListCollection<String>> {
 }
 
 impl Gallery {
-    /// Applies a change.
-    pub fn update(&mut self, message: Message) {
+    /// Applies a change, returning the task it starts.
+    pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Press => self.presses += 1,
             Message::ToggleFavorite => self.favorite = !self.favorite,
@@ -621,6 +688,31 @@ impl Gallery {
                     self.motion.tour_result = Some(completed);
                 }
             }
+            Message::CodeSample(sample) => self.code.sample = sample,
+            Message::LineNumbers(on) => self.code.line_numbers = on,
+            Message::CodeCopied => self.code.copies += 1,
+            Message::CodeEdit(action) => self.code.editor.perform(action),
+            Message::QrData(index) => self.extras.qr_data = index,
+            Message::QrLevel(level) => self.extras.qr_level = level,
+            Message::QrRounded(rounded) => self.extras.qr_rounded = rounded,
+            Message::Signature(event) => self.extras.signature.apply(event),
+            Message::CropShape(shape) => self.extras.set_shape(shape),
+            Message::Cropper(event) => self.extras.crop.apply(event),
+            Message::Menu(event) => self.extras.menu.apply(event),
+            Message::MenuSection(section) => {
+                self.extras.section = section;
+                self.extras.showing = extras::SECTIONS.get(section).copied().unwrap_or_default();
+            }
+            Message::MenuLink(link) => {
+                self.extras.showing = link;
+                self.extras.menu.apply(navigation_menu::Event::Closed);
+            }
+            message @ (Message::Images(_)
+            | Message::Document(_)
+            | Message::ChooseFiles
+            | Message::FilesChosen(_)
+            | Message::Download
+            | Message::Saved(_)) => return self.files.update(message),
             Message::FruitActivated(fruit) => self.data.opened = Some(fruit),
             Message::TocPick(_) => {}
             Message::OpenSheet(_)
@@ -628,6 +720,8 @@ impl Gallery {
             | Message::ShowToast
             | Message::OpenPalette => {}
         }
+
+        Task::none()
     }
 
     /// The task that scrolls the document of the data page to the section
@@ -665,8 +759,11 @@ impl Gallery {
             Page::Data => Some(data::view(self, localizations)),
             Page::Display => Some(display::view(self, localizations)),
             Page::Motion => Some(motion::view(self, localizations)),
+            Page::Code => Some(code::view(self, localizations)),
             Page::Progress => Some(progress::view(self)),
             Page::Icons => Some(icons::view()),
+            Page::Extras => Some(extras::view(self, localizations)),
+            Page::Files => Some(files::view(self, localizations)),
         }
     }
 }

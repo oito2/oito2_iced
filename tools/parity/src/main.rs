@@ -51,6 +51,14 @@ const TARGETS: &[(&str, &[&str])] = &[
         "crates/oito2_iced_themes/tests/fixtures/parity",
         &["schemes.json"],
     ),
+    (
+        "crates/oito2_iced_syntax/tests/fixtures/parity",
+        &["syntax.json"],
+    ),
+    (
+        "crates/oito2_iced_extras/tests/fixtures/parity",
+        &["qr.json"],
+    ),
 ];
 
 fn main() -> ExitCode {
