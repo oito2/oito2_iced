@@ -178,13 +178,17 @@ fn commands() -> CommandRegistry<Message> {
 
 impl Showcase {
     fn new() -> Self {
+        let settings = oito2_iced_settings::read();
+        let mut pages = Pages::default();
+        pages::foundation::show(&mut pages.foundation, &settings);
+
         Self {
-            settings: oito2_iced_settings::read(),
+            settings,
             appearance: Appearance::default(),
             window: WindowState::default(),
             settings_open: false,
             page: PageId::default(),
-            pages: Pages::default(),
+            pages,
             search: String::new(),
             dialog_open: false,
             sheet: None,
@@ -217,7 +221,10 @@ impl Showcase {
                 }
             }
             Message::Placement(placement) => self.window.apply(placement),
-            Message::System(settings) => self.settings = settings,
+            Message::System(settings) => {
+                pages::foundation::show(&mut self.pages.foundation, &settings);
+                self.settings = settings;
+            }
             Message::OpenSettings => self.settings_open = true,
             Message::CloseSettings => self.settings_open = false,
             Message::Mode(mode) => self.appearance.mode = mode,
@@ -561,13 +568,12 @@ mod tests {
 
     /// The showcase on GNOME with no system preferences.
     fn showcase() -> Showcase {
-        Showcase {
-            settings: SystemSettings::fallback(
-                Platform::new(OperatingSystem::Linux, false),
-                Some(DesktopEnvironment::Gnome),
-            ),
-            ..Showcase::new()
-        }
+        let mut app = Showcase::new();
+        let _ = app.update(Message::System(SystemSettings::fallback(
+            Platform::new(OperatingSystem::Linux, false),
+            Some(DesktopEnvironment::Gnome),
+        )));
+        app
     }
 
     /// Runs the messages the simulated interactions published.
@@ -648,6 +654,39 @@ mod tests {
             )
             .roles()
         );
+    }
+
+    /// The value of the row `name` of the settings table of the Foundation
+    /// page.
+    fn foundation_value(app: &Showcase, name: &str) -> String {
+        app.pages
+            .foundation
+            .rows
+            .iter()
+            .find(|[row, _]| row == name)
+            .map(|[_, value]| value.clone())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn the_foundation_page_follows_the_system_settings() {
+        let mut app = on_page(PageId::Foundation);
+        assert_eq!(foundation_value(&app, "Desktop environment"), "gnome");
+
+        let kde = SystemSettings {
+            accent_color: Some("#3A944A".to_owned()),
+            high_contrast: true,
+            ..SystemSettings::fallback(
+                Platform::new(OperatingSystem::Linux, false),
+                Some(DesktopEnvironment::Kde),
+            )
+        };
+        run(&mut app, [Message::System(kde)]);
+
+        assert_eq!(foundation_value(&app, "Desktop environment"), "kde");
+        assert_eq!(foundation_value(&app, "Window control style"), "breeze");
+        assert_eq!(foundation_value(&app, "Accent color"), "#3A944A");
+        assert_eq!(foundation_value(&app, "High contrast"), "true");
     }
 
     /// A press of `key` with the primary modifier of the platform.

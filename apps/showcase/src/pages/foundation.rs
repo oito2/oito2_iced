@@ -37,50 +37,35 @@ const SOURCE: &str = include_str!("foundation.rs");
 /// The state of the page.
 #[derive(Debug)]
 pub struct State {
-    /// The settings shown: the fallback of the running platform until the
-    /// system settings are read.
-    settings: SystemSettings,
-    /// The rows of the settings table.
-    rows: Vec<[String; 2]>,
-    read: bool,
+    /// The rows of the settings table: the settings the application
+    /// follows, given by [`show`].
+    pub(crate) rows: Vec<[String; 2]>,
 }
 
 impl Default for State {
     fn default() -> Self {
-        let settings = SystemSettings::fallback(Platform::current(), None);
-
         Self {
-            rows: rows(&settings),
-            settings,
-            read: false,
+            rows: rows(&SystemSettings::fallback(Platform::current(), None)),
         }
     }
+}
+
+/// Shows `settings`, the system settings the application follows; the
+/// application calls it at start and after every change of the desktop.
+pub fn show(state: &mut State, settings: &SystemSettings) {
+    state.rows = rows(settings);
 }
 
 /// A message of the page.
 #[derive(Debug, Clone)]
 pub enum Message {
-    /// Reads the system settings.
-    Read,
-    /// The system settings were read.
-    Settings(SystemSettings),
     /// Opens the settings of the showcase.
     OpenSettings,
 }
 
 /// Applies a message.
-pub fn update(state: &mut State, message: Message, shell: &mut Shell) -> Task<Message> {
+pub fn update(_state: &mut State, message: Message, shell: &mut Shell) -> Task<Message> {
     match message {
-        // #region read
-        Message::Read => {
-            return Task::perform(async { oito2_iced_settings::read() }, Message::Settings);
-        }
-        Message::Settings(settings) => {
-            state.rows = rows(&settings);
-            state.settings = settings;
-            state.read = true;
-        }
-        // #endregion
         Message::OpenSettings => shell.request(Action::OpenSettings),
     }
 
@@ -204,27 +189,16 @@ fn cells<const N: usize>(rows: &[[String; N]]) -> Vec<Vec<&str>> {
 
 /// The page.
 pub fn view<'a>(state: &'a State, ctx: &Context) -> Element<'a, Message, Theme> {
-    let source = if state.read {
-        "Read from the system."
-    } else {
-        "The fallback of this platform; read the system settings to see yours."
-    };
-
-    let preview = doc::example(
-        ctx,
-        SOURCE,
-        &["read"],
-        column![
-            doc::table(&["Setting", "Value"], &cells(&state.rows)),
-            doc::caption(source),
-            row![
-                button::outlined("Read the system settings").on_press(Message::Read),
-                button::text("Open the showcase settings").on_press(Message::OpenSettings),
-            ]
-            .spacing(spacing::SM),
-        ]
-        .spacing(spacing::MD),
-    );
+    let preview = column![
+        doc::table(&["Setting", "Value"], &cells(&state.rows)),
+        doc::caption(
+            "The settings this application follows: read from the desktop at start and again \
+             after every change, as the theme and the title bar do.",
+        ),
+        row![button::text("Open the showcase settings").on_press(Message::OpenSettings)],
+    ]
+    .spacing(spacing::MD)
+    .into();
 
     let detected = doc::example(
         ctx,
