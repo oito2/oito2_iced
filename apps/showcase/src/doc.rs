@@ -113,9 +113,13 @@ fn heading_at<'a, Message: 'a>(title: &'a str, level: usize) -> Element<'a, Mess
         .into()
 }
 
-/// A paragraph of prose with inline Markdown.
+/// A paragraph of prose with inline Markdown, in Inter.
+///
+/// Each span names its font, so the prose names Inter itself: a span in
+/// `Font::default()` would ask for the generic sans-serif family of the
+/// system instead of the default font of the application.
 pub fn prose<'a, Message: 'a>(markdown: &'a str) -> Element<'a, Message, Theme> {
-    paragraph(markdown, Font::default(), typography::BODY_MEDIUM.size)
+    paragraph(markdown, font::INTER, typography::BODY_MEDIUM.size)
 }
 
 /// Inline Markdown in `font` at `size`.
@@ -586,7 +590,7 @@ mod tests {
     fn inline_markdown_splits_code_bold_and_links() {
         let spans = inline(
             "Use `copy_button` **now**, see [the guide](https://x).",
-            Font::default(),
+            font::INTER,
         );
         let texts: Vec<&str> = spans.iter().map(|span| span.text.as_ref()).collect();
 
