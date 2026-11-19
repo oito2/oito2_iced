@@ -73,7 +73,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: snapshots-${{ matrix.os }}
-          path: crates/*/tests/goldens/*.actual.png
+          path: |
+            crates/*/tests/goldens/*.actual.png
+            apps/*/tests/goldens/*.actual.png
           if-no-files-found: ignore
 
   msrv:

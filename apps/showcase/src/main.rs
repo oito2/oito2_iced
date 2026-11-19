@@ -547,6 +547,18 @@ mod tests {
     use oito2_iced_settings::Platform;
     use oito2_iced_themes::Preset;
 
+    /// Simulator settings with the embedded Inter and the JetBrains Mono of
+    /// the code blocks, so no text falls back to a system font.
+    fn settings() -> iced::Settings {
+        let mut settings = oito2_iced_test_utils::settings();
+        settings.fonts.extend(
+            oito2_iced_syntax::font::JETBRAINS_MONO_FONTS
+                .into_iter()
+                .map(Into::into),
+        );
+        settings
+    }
+
     /// The showcase on GNOME with no system preferences.
     fn showcase() -> Showcase {
         Showcase {
@@ -569,14 +581,14 @@ mod tests {
     fn the_settings_button_opens_the_dialog() {
         let mut app = showcase();
         let messages: Vec<Message> = {
-            let mut ui = Simulator::with_settings(oito2_iced_test_utils::settings(), app.view());
+            let mut ui = Simulator::with_settings(settings(), app.view());
             ui.click("Settings").expect("settings button");
             ui.into_messages().collect()
         };
 
         run(&mut app, messages);
 
-        let mut ui = Simulator::with_settings(oito2_iced_test_utils::settings(), app.view());
+        let mut ui = Simulator::with_settings(settings(), app.view());
         assert!(ui.find("Color theme").is_ok());
         assert!(ui.find("Desktop").is_ok());
     }
@@ -612,7 +624,7 @@ mod tests {
         assert_eq!(style, WindowControlStyle::Macos);
         assert!(layout.trailing.is_empty());
 
-        let mut ui = Simulator::with_settings(oito2_iced_test_utils::settings(), app.view());
+        let mut ui = Simulator::with_settings(settings(), app.view());
         assert!(ui.find("Fechar").is_ok(), "Portuguese window labels");
     }
 
@@ -667,7 +679,7 @@ mod tests {
 
         run(&mut app, [Message::PaletteQuery("qrcode".to_owned())]);
         let messages: Vec<Message> = {
-            let mut ui = Simulator::with_settings(oito2_iced_test_utils::settings(), app.view());
+            let mut ui = Simulator::with_settings(settings(), app.view());
             ui.tap_key(keyboard::key::Named::Enter);
             ui.into_messages().collect()
         };
@@ -694,7 +706,7 @@ mod tests {
         assert_eq!(app.sheet, Some(false));
         assert_eq!(app.toasts.active_count(), 1);
 
-        let mut ui = Simulator::with_size(oito2_iced_test_utils::settings(), TALL, app.view());
+        let mut ui = Simulator::with_size(settings(), TALL, app.view());
         ui.tap_key(keyboard::key::Named::Escape);
         let messages: Vec<Message> = ui.into_messages().collect();
         run(&mut app, messages);
@@ -709,7 +721,7 @@ mod tests {
 
         assert_eq!(app.matching_pages().collect::<Vec<_>>(), [PageId::QrCode]);
 
-        let mut ui = Simulator::with_size(oito2_iced_test_utils::settings(), TALL, app.view());
+        let mut ui = Simulator::with_size(settings(), TALL, app.view());
         assert!(ui.find("QrCode").is_ok());
         assert!(ui.find("Changelog").is_err());
     }
@@ -763,8 +775,7 @@ mod tests {
                 run(&mut app, [Message::Mode(mode), Message::Language(language)]);
 
                 let theme = app.theme();
-                let mut ui =
-                    Simulator::with_size(oito2_iced_test_utils::settings(), size, app.view());
+                let mut ui = Simulator::with_size(settings(), size, app.view());
 
                 assert!(ui.snapshot(&theme).is_ok(), "{page} {mode:?}");
             }
@@ -783,8 +794,7 @@ mod tests {
     fn tab_reaches_every_control_of_every_page() {
         for &page in PageId::ALL {
             let app = on_page(page);
-            let mut ui =
-                Simulator::with_size(oito2_iced_test_utils::settings(), TALL, content(&app));
+            let mut ui = Simulator::with_size(settings(), TALL, content(&app));
             let expected = focusables(&mut ui);
 
             let mut reached = Vec::new();
@@ -814,8 +824,7 @@ mod tests {
     fn every_clickable_control_shows_the_hand_cursor() {
         for &page in PageId::ALL {
             let app = on_page(page);
-            let mut ui =
-                Simulator::with_size(oito2_iced_test_utils::settings(), TALL, content(&app));
+            let mut ui = Simulator::with_size(settings(), TALL, content(&app));
 
             // A carousel takes the focus as a whole for its keys; only its
             // buttons and dots are clickable, and they are checked apart.
@@ -882,11 +891,7 @@ mod tests {
             run(&mut app, [Message::Mode(mode)]);
 
             let theme = app.theme();
-            let mut ui = Simulator::with_size(
-                oito2_iced_test_utils::settings(),
-                (960.0, 680.0),
-                app.view(),
-            );
+            let mut ui = Simulator::with_size(settings(), (960.0, 680.0), app.view());
             let snapshot = ui.snapshot(&theme).expect("snapshot");
 
             oito2_iced_test_utils::golden!(&snapshot, name);

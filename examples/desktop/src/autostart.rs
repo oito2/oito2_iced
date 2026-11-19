@@ -182,24 +182,31 @@ mod tests {
         }
     }
 
+    /// An absolute path on every platform: `name` in the temporary
+    /// directory.
+    fn absolute(name: &str) -> PathBuf {
+        std::env::temp_dir().join(name)
+    }
+
     #[test]
     fn directory_prefers_an_absolute_xdg_config_home() {
         assert_eq!(
-            directory(Some("/cfg".into()), Some("/home/user".into())),
-            Some(PathBuf::from("/cfg/autostart"))
+            directory(Some(absolute("cfg").into()), Some(absolute("home").into())),
+            Some(absolute("cfg").join("autostart"))
         );
     }
 
     #[test]
     fn directory_falls_back_to_home() {
-        let expected = Some(PathBuf::from("/home/user/.config/autostart"));
-        assert_eq!(directory(None, Some("/home/user".into())), expected);
+        let home = absolute("home");
+        let expected = Some(home.join(".config").join("autostart"));
+        assert_eq!(directory(None, Some(home.clone().into())), expected);
         assert_eq!(
-            directory(Some("".into()), Some("/home/user".into())),
+            directory(Some("".into()), Some(home.clone().into())),
             expected
         );
         assert_eq!(
-            directory(Some("relative".into()), Some("/home/user".into())),
+            directory(Some("relative".into()), Some(home.into())),
             expected
         );
     }
